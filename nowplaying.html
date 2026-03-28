@@ -487,16 +487,12 @@
   </div>
 </div>
 
+<script src="config.js"></script>
 <script>
-// ============================================================
-// CONFIGURATION — edit these two values
-// ============================================================
-const HA_HOST = 'homeassistant.local:8123';       // e.g. '192.168.1.50:8123'
-const HA_TOKEN = '***REDACTED***'; // from HA profile page
-// Entity is passed via URL param: ?entity=media_player.sonos_kitchen
-// Falls back to this default if no param present:
-const DEFAULT_ENTITY = 'media_player.living_room';
-// ============================================================
+if (typeof HA_HOST === 'undefined') {
+  document.body.innerHTML = '<pre style="color:#ff2244;padding:40px;">ERROR: config.js not found.\nCopy config.example.js to config.js and fill in your values.</pre>';
+  throw new Error('config.js not loaded');
+}
 
 const params = new URLSearchParams(window.location.search);
 const SONOS_ENTITY = params.get('entity') || DEFAULT_ENTITY;
