@@ -1,0 +1,28 @@
+name: Deploy to Home Assistant
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+
+      - name: Deploy to HA Green
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HA_SSH_HOST }}
+          port: ${{ secrets.HA_SSH_PORT }}
+          username: root
+          key: ${{ secrets.HA_SSH_KEY }}
+          source: "nowplaying.html"
+          target: "/config/www/"
