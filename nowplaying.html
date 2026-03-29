@@ -793,6 +793,7 @@ function connect() {
           document.getElementById('ws-status').textContent = 'WS:LIVE';
           fetchActivePlaying();
           startProgressTick();
+          startPolling();
         } else {
           document.getElementById('ws-status').textContent = 'WS:AUTH_FAIL';
         }
@@ -822,6 +823,7 @@ function connect() {
     document.getElementById('ws-status').textContent = `WS:DOWN (${e.code})`;
     document.getElementById('conn-error').classList.add('visible');
     clearInterval(progressInterval);
+    clearInterval(pollTimer);
     reconnectTimer = setTimeout(connect, 5000);
   };
 
@@ -829,6 +831,16 @@ function connect() {
     document.getElementById('ws-status').textContent = `WS:ERR ${MA_BASE}`;
     ws.close();
   };
+}
+
+let pollTimer = null;
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(() => {
+    if (authenticated && ws && ws.readyState === WebSocket.OPEN) {
+      fetchActivePlaying();
+    }
+  }, 5000);
 }
 
 function fetchActivePlaying() {
