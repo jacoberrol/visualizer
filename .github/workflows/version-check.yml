@@ -15,9 +15,13 @@ jobs:
       - name: Check version was bumped
         run: |
           PR_VERSION=$(node -p "require('./package.json').version")
-          MAIN_VERSION=$(git show origin/main:package.json | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version")
+          MAIN_VERSION=$(git show origin/main:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
           echo "PR version: $PR_VERSION"
-          echo "Main version: $MAIN_VERSION"
+          echo "Main version: ${MAIN_VERSION:-<not found>}"
+          if [ -z "$MAIN_VERSION" ]; then
+            echo "No package.json on main yet — first version, passing."
+            exit 0
+          fi
           if [ "$PR_VERSION" = "$MAIN_VERSION" ]; then
             echo "::error::Version not bumped. Run 'npm version patch|minor|major' before merging."
             exit 1
