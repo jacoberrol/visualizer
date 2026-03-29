@@ -30,4 +30,6 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.HA_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${{ secrets.HA_SSH_PORT }} nowplaying.html themes.js root@${{ secrets.HA_SSH_HOST }}:/config/www/
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${{ secrets.HA_SSH_PORT }} root@${{ secrets.HA_SSH_HOST }} "mkdir -p /config/www/models"
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${{ secrets.HA_SSH_PORT }} nowplaying.html core.js root@${{ secrets.HA_SSH_HOST }}:/config/www/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${{ secrets.HA_SSH_PORT }} models/*.css models/*.js root@${{ secrets.HA_SSH_HOST }}:/config/www/models/
