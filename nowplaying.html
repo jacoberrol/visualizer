@@ -588,16 +588,17 @@ let lastKnownMedia = null;
 function updateFromPlayer(player, queue) {
   const media = player.current_media;
   const state = player.playback_state || 'idle';
+  const hasQueueTrack = !!queue?.current_item?.media_item;
+  const hasMedia = hasQueueTrack || (media && media.title);
 
   isPlaying = state === 'playing';
   activePlayerId = player.player_id;
 
-  // If we have current media, use it and save as last known
-  if (media && media.title) {
+  if (hasMedia) {
     lastKnownMedia = { media, player, queue };
     renderTrackInfo(state, media, player, queue);
   } else if (lastKnownMedia) {
-    // No current media — show last known track as idle
+    // No current media — show last known track
     renderTrackInfo(state, lastKnownMedia.media, player, lastKnownMedia.queue);
   } else {
     // Nothing ever played — show standby
@@ -607,12 +608,18 @@ function updateFromPlayer(player, queue) {
 }
 
 function renderTrackInfo(state, media, player, queue) {
-  const title = media?.title || '—';
-  const artist = media?.artist || '—';
-  const album = media?.album || '—';
-  const artUrl = media?.image_url || '';
-  const duration = media?.duration || 0;
-  const source = media?.uri || '—';
+  // Prefer queue's current_item for rich metadata (player.current_media
+  // often only has the source name, e.g. "Spotify", when using external control)
+  const queueItem = queue?.current_item;
+  const trackInfo = queueItem?.media_item;
+
+  const title = trackInfo?.name || queueItem?.name || media?.title || '—';
+  const artists = trackInfo?.artists;
+  const artist = artists?.length ? artists.map(a => a.name).join(', ') : (media?.artist || '—');
+  const album = trackInfo?.album?.name || media?.album || '—';
+  const artUrl = queueItem?.image?.path || media?.image_url || '';
+  const duration = queueItem?.duration || media?.duration || 0;
+  const source = media?.source_id || media?.uri || '—';
 
   isPlaying = state === 'playing';
 
@@ -768,14 +775,23 @@ function fetchActivePlaying() {
   sendCmdWithCallback('players/all', {}, (players) => {
     const player = pickActivePlayer(players);
     if (player) {
-      // Also fetch queue for shuffle/repeat
       sendCmdWithCallback('player_queues/get_active_queue', { player_id: player.player_id }, (queue) => {
         updateFromPlayer(player, queue);
       });
     } else {
-      // No active player — show idle
-      document.getElementById('idle-screen').classList.add('visible');
-      setVisualizerPlaying(false);
+      // No playing/paused player — check queues for last played track
+      sendCmdWithCallback('player_queues/all', {}, (queues) => {
+        const queueWithTrack = queues.find(q => q.current_item?.media_item);
+        if (queueWithTrack) {
+          // Find the matching player for display name
+          const matchPlayer = players.find(p => p.player_id === queueWithTrack.queue_id) ||
+            { player_id: queueWithTrack.queue_id, name: queueWithTrack.display_name, playback_state: 'idle', current_media: null, elapsed_time: queueWithTrack.elapsed_time, elapsed_time_last_updated: 0 };
+          updateFromPlayer(matchPlayer, queueWithTrack);
+        } else {
+          document.getElementById('idle-screen').classList.add('visible');
+          setVisualizerPlaying(false);
+        }
+      });
     }
   });
 }
