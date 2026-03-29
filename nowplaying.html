@@ -759,14 +759,15 @@ function connect() {
     }
   };
 
-  ws.onclose = () => {
-    document.getElementById('ws-status').textContent = 'WS:DOWN';
+  ws.onclose = (e) => {
+    document.getElementById('ws-status').textContent = `WS:DOWN (${e.code})`;
     document.getElementById('conn-error').classList.add('visible');
     clearInterval(progressInterval);
     reconnectTimer = setTimeout(connect, 5000);
   };
 
   ws.onerror = () => {
+    document.getElementById('ws-status').textContent = `WS:ERR ${MA_BASE}`;
     ws.close();
   };
 }
