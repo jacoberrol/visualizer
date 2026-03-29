@@ -666,9 +666,10 @@ function proxyArtUrl(url) {
 }
 
 function renderTrackInfo(state, media, player, queue) {
-  // Prefer queue's current_item for rich metadata (player.current_media
-  // often only has the source name, e.g. "Spotify", when using external control)
-  const queueItem = queue?.current_item;
+  // When the player is active but the queue is idle/stale (e.g. Spotify Connect
+  // bypasses MA's queue), trust the player's current_media over queue data.
+  const queueIsActive = queue && queue.state === 'playing';
+  const queueItem = queueIsActive ? queue.current_item : null;
   const trackInfo = queueItem?.media_item;
 
   const title = trackInfo?.name || queueItem?.name || media?.title || '—';
