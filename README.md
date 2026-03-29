@@ -117,6 +117,24 @@ This file is never overwritten by deployments — only `nowplaying.html` is depl
 
 Push to `main` or trigger manually from **Actions > Deploy to Home Assistant > Run workflow**.
 
+## Fire TV Kiosk Setup
+
+For a dedicated "now playing" display on a Fire TV, use [Fully Kiosk Browser](https://www.fully-kiosk.com/) to run the dashboard full-screen without browser chrome.
+
+1. **Enable ADB Debugging** on the Fire TV: Settings → My Fire TV → Developer Options → ADB Debugging → ON
+2. **Find the Fire TV's IP**: Settings → My Fire TV → About → Network
+3. **Sideload Fully Kiosk Browser**:
+   ```bash
+   adb connect <fire-tv-ip>
+   adb install fullykiosk.apk
+   ```
+4. **Set the Start URL** in Fully Kiosk's settings:
+   ```
+   http://<ha-host>:8123/local/nowplaying.html
+   ```
+
+> **Note:** Fully Kiosk Browser requires Android 8+. Fire TVs from 2017 or earlier (Android 7 / Fire OS 5) may need an older APK version.
+
 ## Security Notes
 
 - `config.js` is git-ignored and never committed — secrets stay on the device
