@@ -15,7 +15,7 @@
   // Synchronous model loader — runs before rendering to prevent FOUC
   (function() {
     var params = new URLSearchParams(window.location.search);
-    var model = params.get('theme') || 'crt';
+    var model = params.get('theme') || 'te';
     model = model.replace(/[^a-z0-9-]/g, '');
     document.documentElement.setAttribute('data-model', model);
     document.write('<link rel="stylesheet" href="models/' + model + '.css">');
