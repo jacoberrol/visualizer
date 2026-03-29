@@ -376,3 +376,30 @@ function handleTimeUpdate(data) {
 }
 
 connect();
+
+// Auto-reload when a new version is deployed.
+// Polls package.json every 30s and reloads if the version changes.
+(function() {
+  var currentVersion = null;
+
+  function checkVersion() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'package.json?_=' + Date.now(), true);
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        try {
+          var v = JSON.parse(xhr.responseText).version;
+          if (currentVersion === null) {
+            currentVersion = v;
+          } else if (v !== currentVersion) {
+            window.location.reload();
+          }
+        } catch(e) {}
+      }
+    };
+    xhr.send();
+  }
+
+  checkVersion();
+  setInterval(checkVersion, 30000);
+})();
