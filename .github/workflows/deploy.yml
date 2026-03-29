@@ -27,11 +27,8 @@ jobs:
           tags: tag:ci
 
       - name: Deploy to HA Green
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.HA_SSH_HOST }}
-          port: ${{ secrets.HA_SSH_PORT }}
-          username: root
-          key: ${{ secrets.HA_SSH_KEY }}
-          source: "nowplaying.html"
-          target: "/config/www/"
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HA_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${{ secrets.HA_SSH_PORT }} nowplaying.html root@${{ secrets.HA_SSH_HOST }}:/config/www/
