@@ -207,10 +207,21 @@ function renderTrackInfo(state, media, player, queue) {
   runHooks('onTrackChange', NP.state);
 }
 
+var lastProgressPct = 0;
 function updateProgress() {
   if (currentDuration <= 0) return;
   var pct = Math.min((currentPos / currentDuration) * 100, 100);
-  document.getElementById('progress-bar').style.width = pct + '%';
+  var bar = document.getElementById('progress-bar');
+  // Skip transition when progress jumps backwards (track change)
+  if (pct < lastProgressPct - 5) {
+    bar.style.transition = 'none';
+    bar.style.width = pct + '%';
+    bar.offsetWidth; // force reflow
+    bar.style.transition = '';
+  } else {
+    bar.style.width = pct + '%';
+  }
+  lastProgressPct = pct;
   document.getElementById('pos-current').textContent = fmt(currentPos);
   document.getElementById('pos-duration').textContent = fmt(currentDuration);
   NP.state.position = currentPos;
