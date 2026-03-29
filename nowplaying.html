@@ -582,9 +582,31 @@ function pickActivePlayer(players) {
   return null;
 }
 
+// Track last known good display data so we can show "last played" when idle
+let lastKnownMedia = null;
+
 function updateFromPlayer(player, queue) {
   const media = player.current_media;
   const state = player.playback_state || 'idle';
+
+  isPlaying = state === 'playing';
+  activePlayerId = player.player_id;
+
+  // If we have current media, use it and save as last known
+  if (media && media.title) {
+    lastKnownMedia = { media, player, queue };
+    renderTrackInfo(state, media, player, queue);
+  } else if (lastKnownMedia) {
+    // No current media — show last known track as idle
+    renderTrackInfo(state, lastKnownMedia.media, player, lastKnownMedia.queue);
+  } else {
+    // Nothing ever played — show standby
+    document.getElementById('idle-screen').classList.add('visible');
+    setVisualizerPlaying(false);
+  }
+}
+
+function renderTrackInfo(state, media, player, queue) {
   const title = media?.title || '—';
   const artist = media?.artist || '—';
   const album = media?.album || '—';
@@ -593,9 +615,8 @@ function updateFromPlayer(player, queue) {
   const source = media?.uri || '—';
 
   isPlaying = state === 'playing';
-  activePlayerId = player.player_id;
 
-  // Compute elapsed time: MA provides elapsed_time + timestamp of last update
+  // Compute elapsed time
   const elapsed = player.elapsed_time || 0;
   const lastUpdated = player.elapsed_time_last_updated || 0;
   if (isPlaying && lastUpdated > 0) {
@@ -631,9 +652,8 @@ function updateFromPlayer(player, queue) {
   // Visualizer
   setVisualizerPlaying(isPlaying);
 
-  // Idle screen
-  const idle = !['playing', 'paused', 'buffering'].includes(state);
-  document.getElementById('idle-screen').classList.toggle('visible', idle);
+  // Never show idle screen if we have track info to display
+  document.getElementById('idle-screen').classList.remove('visible');
 
   // State dot color
   const dot = document.getElementById('state-dot');
