@@ -8,13 +8,24 @@
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
 
   :root {
-    --green: #00ff88;
-    --dim-green: #00ff8844;
-    --cyan: #00eeff;
-    --red: #ff2244;
+    --accent: #00ff88;
+    --accent-dim: #00ff8844;
+    --secondary: #00eeff;
+    --warning: #ffaa00;
+    --error: #ff2244;
     --bg: #020a06;
+    --text-primary: #ffffff;
     --panel: rgba(0, 255, 136, 0.04);
     --border: rgba(0, 255, 136, 0.15);
+    --overlay: rgba(0, 0, 0, 0.6);
+    --scanline: rgba(0, 0, 0, 0.12);
+    --vignette: rgba(0, 0, 0, 0.85);
+    --glow-color: rgba(0, 255, 136, 0.3);
+    --pill-bg: rgba(0, 255, 136, 0.08);
+    --pill-glow: rgba(0, 255, 136, 0.15);
+    --progress-bg: rgba(0, 255, 136, 0.1);
+    --art-filter: saturate(0.7) brightness(0.9);
+    --bg-blur: blur(60px) brightness(0.18) saturate(1.8);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -22,7 +33,7 @@
   html, body {
     width: 100%; height: 100%;
     background: var(--bg);
-    color: var(--green);
+    color: var(--accent);
     font-family: 'Share Tech Mono', monospace;
     overflow: hidden;
     cursor: none;
@@ -37,8 +48,8 @@
       0deg,
       transparent,
       transparent 2px,
-      rgba(0,0,0,0.12) 2px,
-      rgba(0,0,0,0.12) 4px
+      var(--scanline) 2px,
+      var(--scanline) 4px
     );
     pointer-events: none;
     z-index: 100;
@@ -49,7 +60,7 @@
     content: '';
     position: fixed;
     inset: 0;
-    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.85) 100%);
+    background: radial-gradient(ellipse at center, transparent 60%, var(--vignette) 100%);
     pointer-events: none;
     z-index: 99;
   }
@@ -60,7 +71,7 @@
     inset: -40px;
     background-size: cover;
     background-position: center;
-    filter: blur(60px) brightness(0.18) saturate(1.8);
+    filter: var(--bg-blur);
     transition: background-image 1.2s ease;
     z-index: 0;
   }
@@ -90,7 +101,7 @@
     font-family: 'VT323', monospace;
     font-size: 22px;
     letter-spacing: 6px;
-    color: var(--green);
+    color: var(--accent);
     opacity: 0.7;
   }
 
@@ -103,7 +114,7 @@
   }
 
   #clock {
-    color: var(--cyan);
+    color: var(--secondary);
     opacity: 0.7;
   }
 
@@ -140,14 +151,14 @@
     border: 1px solid transparent;
     border-image: none;
     background:
-      linear-gradient(var(--green), var(--green)) top left / 20px 1px no-repeat,
-      linear-gradient(var(--green), var(--green)) top left / 1px 20px no-repeat,
-      linear-gradient(var(--green), var(--green)) top right / 20px 1px no-repeat,
-      linear-gradient(var(--green), var(--green)) top right / 1px 20px no-repeat,
-      linear-gradient(var(--green), var(--green)) bottom left / 20px 1px no-repeat,
-      linear-gradient(var(--green), var(--green)) bottom left / 1px 20px no-repeat,
-      linear-gradient(var(--green), var(--green)) bottom right / 20px 1px no-repeat,
-      linear-gradient(var(--green), var(--green)) bottom right / 1px 20px no-repeat;
+      linear-gradient(var(--accent), var(--accent)) top left / 20px 1px no-repeat,
+      linear-gradient(var(--accent), var(--accent)) top left / 1px 20px no-repeat,
+      linear-gradient(var(--accent), var(--accent)) top right / 20px 1px no-repeat,
+      linear-gradient(var(--accent), var(--accent)) top right / 1px 20px no-repeat,
+      linear-gradient(var(--accent), var(--accent)) bottom left / 20px 1px no-repeat,
+      linear-gradient(var(--accent), var(--accent)) bottom left / 1px 20px no-repeat,
+      linear-gradient(var(--accent), var(--accent)) bottom right / 20px 1px no-repeat,
+      linear-gradient(var(--accent), var(--accent)) bottom right / 1px 20px no-repeat;
     z-index: 3;
     opacity: 0.6;
   }
@@ -157,7 +168,7 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    filter: saturate(0.7) brightness(0.9);
+    filter: var(--art-filter);
     transition: opacity 0.8s ease;
   }
 
@@ -166,10 +177,10 @@
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(0,0,0,0.6);
+    background: var(--overlay);
     font-size: 10px;
     letter-spacing: 3px;
-    color: var(--green);
+    color: var(--accent);
     opacity: 0.5;
     padding: 6px 10px;
     text-align: center;
@@ -193,7 +204,7 @@
     letter-spacing: 4px;
     opacity: 0.4;
     margin-bottom: 6px;
-    color: var(--cyan);
+    color: var(--secondary);
   }
 
   .info-value {
@@ -208,14 +219,14 @@
     font-size: 52px;
     letter-spacing: 2px;
     line-height: 1;
-    color: #ffffff;
-    text-shadow: 0 0 30px rgba(0,255,136,0.3);
+    color: var(--text-primary);
+    text-shadow: 0 0 30px var(--glow-color);
     margin-bottom: 4px;
   }
 
   #track-artist {
     font-size: 22px;
-    color: var(--green);
+    color: var(--accent);
     letter-spacing: 3px;
     opacity: 0.85;
   }
@@ -234,15 +245,15 @@
   #progress-bar-wrap {
     position: relative;
     height: 2px;
-    background: rgba(0,255,136,0.1);
+    background: var(--progress-bg);
     margin: 10px 0 8px;
     overflow: visible;
   }
 
   #progress-bar {
     height: 100%;
-    background: var(--green);
-    box-shadow: 0 0 8px var(--green);
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
     transition: width 1s linear;
     position: relative;
   }
@@ -255,8 +266,8 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 10px var(--green);
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
   }
 
   #progress-times {
@@ -280,15 +291,15 @@
     letter-spacing: 3px;
     padding: 4px 12px;
     border: 1px solid var(--border);
-    color: var(--green);
+    color: var(--accent);
     opacity: 0.5;
   }
 
   .status-pill.active {
     opacity: 1;
-    border-color: var(--green);
-    background: rgba(0,255,136,0.08);
-    box-shadow: 0 0 12px rgba(0,255,136,0.15);
+    border-color: var(--accent);
+    background: var(--pill-bg);
+    box-shadow: 0 0 12px var(--pill-glow);
   }
 
   #state-indicator {
@@ -303,8 +314,8 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 8px var(--green);
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
     animation: pulse 2s infinite;
   }
 
@@ -324,7 +335,7 @@
 
   .bar {
     width: 3px;
-    background: var(--green);
+    background: var(--accent);
     opacity: 0.6;
     border-radius: 1px;
     animation: wave 0s infinite ease-in-out alternate;
@@ -407,7 +418,7 @@
     right: 20px;
     font-size: 10px;
     letter-spacing: 2px;
-    color: var(--red);
+    color: var(--error);
     opacity: 0.7;
     z-index: 200;
   }
@@ -488,13 +499,19 @@
 </div>
 
 <script src="config.js"></script>
+<script src="themes.js"></script>
 <script>
 if (typeof HA_HOST === 'undefined') {
-  document.body.innerHTML = '<pre style="color:#ff2244;padding:40px;">ERROR: config.js not found.\nCopy config.example.js to config.js and fill in your values.</pre>';
+  document.body.innerHTML = '<pre style="color:var(--error);padding:40px;">ERROR: config.js not found.\nCopy config.example.js to config.js and fill in your values.</pre>';
   throw new Error('config.js not loaded');
 }
 
 const params = new URLSearchParams(window.location.search);
+const themeName = params.get('theme') || 'crt';
+const theme = THEMES[themeName] || THEMES.crt;
+const root = document.documentElement;
+Object.entries(theme).forEach(([prop, val]) => root.style.setProperty(prop, val));
+
 const SONOS_ENTITY = params.get('entity') || DEFAULT_ENTITY;
 
 let ws = null;
@@ -601,8 +618,8 @@ function updateUI(state, attrs) {
 
   // State dot color
   const dot = document.getElementById('state-dot');
-  dot.style.background = isPlaying ? 'var(--green)' : '#ffaa00';
-  dot.style.boxShadow = isPlaying ? '0 0 8px var(--green)' : '0 0 8px #ffaa00';
+  dot.style.background = isPlaying ? 'var(--accent)' : 'var(--warning)';
+  dot.style.boxShadow = isPlaying ? '0 0 8px var(--accent)' : '0 0 8px var(--warning)';
 }
 
 function updateProgress() {
