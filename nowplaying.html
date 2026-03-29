@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>NOW PLAYING</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
@@ -499,7 +502,7 @@
   </div>
 </div>
 
-<script src="config.js"></script>
+<script>document.write('<script src="config.js?v=' + Date.now() + '"><\/script>');</script>
 <script src="themes.js"></script>
 <script>
 if (typeof MA_TOKEN === 'undefined') {
@@ -609,6 +612,13 @@ function updateFromPlayer(player, queue) {
   }
 }
 
+// Proxy album art through Music Assistant so devices that can't reach
+// the media server directly (e.g. Fire TV without Tailscale) still load art.
+function proxyArtUrl(url) {
+  if (!url) return '';
+  return `http://${MA_BASE}/imageproxy?path=${encodeURIComponent(url)}&size=500`;
+}
+
 function renderTrackInfo(state, media, player, queue) {
   // Prefer queue's current_item for rich metadata (player.current_media
   // often only has the source name, e.g. "Spotify", when using external control)
@@ -619,7 +629,8 @@ function renderTrackInfo(state, media, player, queue) {
   const artists = trackInfo?.artists;
   const artist = artists?.length ? artists.map(a => a.name).join(', ') : (media?.artist || '—');
   const album = trackInfo?.album?.name || media?.album || '—';
-  const artUrl = queueItem?.image?.path || media?.image_url || '';
+  const rawArtUrl = queueItem?.image?.path || media?.image_url || '';
+  const artUrl = proxyArtUrl(rawArtUrl);
   const duration = queueItem?.duration || media?.duration || 0;
   const source = media?.source_id || media?.uri || '—';
 
