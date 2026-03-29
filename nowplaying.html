@@ -436,6 +436,7 @@
 </div>
 
 <div id="conn-error">⚠ WS DISCONNECTED — RECONNECTING...</div>
+<div id="debug-info" style="position:fixed;top:40px;left:60px;font-size:11px;opacity:0.4;letter-spacing:2px;z-index:200;"></div>
 
 <div id="app">
   <!-- Top bar -->
@@ -507,6 +508,7 @@ if (typeof MA_TOKEN === 'undefined') {
 }
 
 const MA_BASE = typeof MA_HOST !== 'undefined' ? MA_HOST : HA_HOST.replace(':8123', ':8095');
+document.getElementById('debug-info').textContent = `TARGET: ws://${MA_BASE}/ws`;
 
 const params = new URLSearchParams(window.location.search);
 const themeName = params.get('theme') || 'crt';
