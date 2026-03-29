@@ -427,6 +427,52 @@
   }
 
   #conn-error.visible { display: block; }
+
+  /* Smaller viewports (720p TVs, browsers with chrome eating space) */
+  @media (max-height: 800px) {
+    #app {
+      padding: 20px 30px;
+    }
+
+    #topbar { padding-bottom: 10px; }
+    #topbar .logo { font-size: 18px; letter-spacing: 4px; }
+    #topbar .sys-info { font-size: 10px; gap: 20px; }
+
+    #main {
+      gap: 30px;
+      padding: 20px 0;
+    }
+
+    #art-wrapper {
+      width: 220px;
+      height: 220px;
+    }
+
+    #track-title {
+      font-size: 36px;
+    }
+
+    #track-artist {
+      font-size: 16px;
+    }
+
+    #track-album {
+      font-size: 11px;
+    }
+
+    #track-info {
+      gap: 12px;
+    }
+
+    #visualizer {
+      height: 24px;
+      margin-top: 8px;
+    }
+
+    #bottombar { padding-top: 10px; }
+
+    #debug-info { display: none; }
+  }
 </style>
 </head>
 <body>
