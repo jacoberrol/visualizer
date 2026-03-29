@@ -30,11 +30,13 @@ Required GitHub Secrets: `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `HA_SSH_HOST`,
 
 - `nowplaying.html` — all markup, styles, and logic inline
 - `config.js` — runtime config, git-ignored, lives on device
-- Connects to HA via **WebSocket API** (`ws://<host>/api/websocket`)
-- Authenticates with a long-lived access token
-- Subscribes to `state_changed` events filtered to the target `media_player` entity
-- Fetches initial state via `get_states` on connect, then stays live via event stream
-- Progress bar ticks locally every 1s while playing, resyncs on each state event
+- Connects to **Music Assistant** via WebSocket (`ws://<host>:8095/ws`)
+- Authenticates with a long-lived MA access token
+- Fetches initial state via `players/all` and `player_queues/all` commands on connect
+- Listens for `player_updated`, `queue_updated`, and `queue_time_updated` push events
+- **Polling workaround**: Also polls `players/all` + `player_queues/all` every 5s because MA server v2.8.1 does not push events to WebSocket clients despite the server code subscribing after auth. The event listeners are still in place so polling can be removed if a future MA version fixes this.
+- Album art URLs are proxied through MA's `/imageproxy?path=<url>&size=500` endpoint so devices that can't reach the media server directly (e.g. a Fire TV without Tailscale) can still load art
+- Progress bar ticks locally every 1s while playing, resyncs on each poll or event
 - Auto-reconnects on WebSocket disconnect (5s delay)
 
 ## UI
@@ -49,6 +51,6 @@ Required GitHub Secrets: `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `HA_SSH_HOST`,
 ## Key conventions
 
 - Keep it as a single HTML file — no external JS/CSS dependencies beyond Google Fonts and `config.js`
-- All state comes from HA WebSocket; no REST API calls
+- All state comes from Music Assistant WebSocket; no REST API calls (except `/imageproxy` for album art)
 - URL param `?entity=` selects the media player entity
 - Secrets never committed — only `config.example.js` is in the repo
