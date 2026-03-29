@@ -18,6 +18,13 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
+      - name: Stamp version and SHA
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          SHA=$(git rev-parse --short HEAD)
+          sed -i "s/__VERSION__/$VERSION/g" nowplaying.html
+          sed -i "s/__SHA__/$SHA/g" nowplaying.html
+
       - name: Deploy to HA Green
         run: |
           mkdir -p ~/.ssh
