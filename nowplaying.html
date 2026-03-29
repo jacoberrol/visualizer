@@ -440,7 +440,7 @@
 <div id="app">
   <!-- Top bar -->
   <div id="topbar">
-    <div class="logo">SONOS // MONITOR</div>
+    <div class="logo">MUSIC ASSISTANT // MONITOR</div>
     <div class="sys-info">
       <span>SYS:ONLINE</span>
       <span id="clock">00:00:00</span>
@@ -494,17 +494,19 @@
   <!-- Bottom bar -->
   <div id="bottombar">
     <div id="data-stream">INIT...</div>
-    <div id="entity-id">ENTITY: —</div>
+    <div id="entity-id">PLAYER: —</div>
   </div>
 </div>
 
 <script src="config.js"></script>
 <script src="themes.js"></script>
 <script>
-if (typeof HA_HOST === 'undefined') {
-  document.body.innerHTML = '<pre style="color:var(--error);padding:40px;">ERROR: config.js not found.\nCopy config.example.js to config.js and fill in your values.</pre>';
+if (typeof MA_TOKEN === 'undefined') {
+  document.body.innerHTML = '<pre style="color:var(--error);padding:40px;">ERROR: config.js not found or missing MA_TOKEN.\nCopy config.example.js to config.js and fill in your values.</pre>';
   throw new Error('config.js not loaded');
 }
+
+const MA_BASE = typeof MA_HOST !== 'undefined' ? MA_HOST : HA_HOST.replace(':8123', ':8095');
 
 const params = new URLSearchParams(window.location.search);
 const themeName = params.get('theme') || 'crt';
@@ -512,14 +514,15 @@ const theme = THEMES[themeName] || THEMES.crt;
 const root = document.documentElement;
 Object.entries(theme).forEach(([prop, val]) => root.style.setProperty(prop, val));
 
-const SONOS_ENTITY = params.get('entity') || DEFAULT_ENTITY;
-
 let ws = null;
 let reconnectTimer = null;
 let progressInterval = null;
 let currentPos = 0;
 let currentDuration = 0;
+let posLastUpdated = 0;
 let isPlaying = false;
+let activePlayerId = null;
+let msgCounter = 0;
 
 // Build visualizer bars
 const viz = document.getElementById('visualizer');
@@ -543,8 +546,7 @@ function setVisualizerPlaying(playing) {
 // Clock
 function updateClock() {
   const now = new Date();
-  document.getElementById('clock').textContent =
-    now.toTimeString().slice(0,8);
+  document.getElementById('clock').textContent = now.toTimeString().slice(0, 8);
 }
 setInterval(updateClock, 1000);
 updateClock();
@@ -554,16 +556,15 @@ function fmt(s) {
   s = Math.floor(s || 0);
   const m = Math.floor(s / 60);
   const sec = s % 60;
-  return `${m}:${sec.toString().padStart(2,'0')}`;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
 // Data stream ticker
 const streamMsgs = [
-  'ESTABLISHING UPNP HANDSHAKE...',
+  'MUSIC ASSISTANT CONNECTED',
   'AUDIO BUFFER: NOMINAL',
   'METADATA SYNC: OK',
   'STREAM INTEGRITY: 100%',
-  'CODEC: AAC/320KBPS',
   'LATENCY: <12MS',
 ];
 let streamIdx = 0;
@@ -572,27 +573,46 @@ setInterval(() => {
   streamIdx++;
 }, 3000);
 
-function updateUI(state, attrs) {
-  const title = attrs.media_title || '—';
-  const artist = attrs.media_artist || '—';
-  const album = attrs.media_album_name || '—';
-  const artUrl = attrs.entity_picture
-    ? `http://${HA_HOST}${attrs.entity_picture}`
-    : '';
-  const duration = attrs.media_duration || 0;
-  const position = attrs.media_position || 0;
-  const shuffle = attrs.shuffle;
-  const repeat = attrs.repeat;
-  const source = attrs.media_content_id || attrs.source || '—';
+// Pick the best player: first playing, else first paused, else null
+function pickActivePlayer(players) {
+  const playing = players.find(p => p.available && p.playback_state === 'playing');
+  if (playing) return playing;
+  const paused = players.find(p => p.available && p.playback_state === 'paused');
+  if (paused) return paused;
+  return null;
+}
+
+function updateFromPlayer(player, queue) {
+  const media = player.current_media;
+  const state = player.playback_state || 'idle';
+  const title = media?.title || '—';
+  const artist = media?.artist || '—';
+  const album = media?.album || '—';
+  const artUrl = media?.image_url || '';
+  const duration = media?.duration || 0;
+  const source = media?.uri || '—';
 
   isPlaying = state === 'playing';
+  activePlayerId = player.player_id;
+
+  // Compute elapsed time: MA provides elapsed_time + timestamp of last update
+  const elapsed = player.elapsed_time || 0;
+  const lastUpdated = player.elapsed_time_last_updated || 0;
+  if (isPlaying && lastUpdated > 0) {
+    const now = Date.now() / 1000;
+    currentPos = elapsed + (now - lastUpdated);
+  } else {
+    currentPos = elapsed;
+  }
+  currentDuration = duration;
+  posLastUpdated = lastUpdated;
 
   document.getElementById('track-title').textContent = title;
   document.getElementById('track-artist').textContent = artist;
   document.getElementById('track-album').textContent = album;
   document.getElementById('state-text').textContent = state.toUpperCase();
-  document.getElementById('entity-id').textContent = `ENTITY: ${SONOS_ENTITY.toUpperCase()}`;
-  document.getElementById('media-source').textContent = source.length > 60 ? source.slice(0,60)+'…' : source;
+  document.getElementById('entity-id').textContent = `PLAYER: ${player.name.toUpperCase()}`;
+  document.getElementById('media-source').textContent = source.length > 60 ? source.slice(0, 60) + '…' : source;
 
   // Album art
   if (artUrl) {
@@ -600,20 +620,19 @@ function updateUI(state, attrs) {
     document.getElementById('art-bg').style.backgroundImage = `url('${artUrl}')`;
   }
 
-  // Progress
-  currentDuration = duration;
-  currentPos = position;
   updateProgress();
 
-  // Shuffle / repeat pills
-  document.getElementById('pill-shuffle').classList.toggle('active', !!shuffle);
-  document.getElementById('pill-repeat').classList.toggle('active', repeat && repeat !== 'off');
+  // Shuffle / repeat from queue
+  if (queue) {
+    document.getElementById('pill-shuffle').classList.toggle('active', !!queue.shuffle_enabled);
+    document.getElementById('pill-repeat').classList.toggle('active', queue.repeat_mode && queue.repeat_mode !== 'off');
+  }
 
   // Visualizer
   setVisualizerPlaying(isPlaying);
 
   // Idle screen
-  const idle = !['playing','paused','buffering'].includes(state);
+  const idle = !['playing', 'paused', 'buffering'].includes(state);
   document.getElementById('idle-screen').classList.toggle('visible', idle);
 
   // State dot color
@@ -630,7 +649,6 @@ function updateProgress() {
   document.getElementById('pos-duration').textContent = fmt(currentDuration);
 }
 
-// Increment position locally while playing
 function startProgressTick() {
   clearInterval(progressInterval);
   progressInterval = setInterval(() => {
@@ -641,64 +659,76 @@ function startProgressTick() {
   }, 1000);
 }
 
-// WebSocket connection
+function sendCmd(command, args) {
+  const id = 'msg-' + (++msgCounter);
+  ws.send(JSON.stringify({ message_id: id, command, args: args || {} }));
+  return id;
+}
+
+// Store pending response callbacks
+const pending = {};
+function sendCmdWithCallback(command, args, callback) {
+  const id = 'msg-' + (++msgCounter);
+  pending[id] = callback;
+  ws.send(JSON.stringify({ message_id: id, command, args: args || {} }));
+}
+
+// WebSocket connection to Music Assistant
+let authenticated = false;
+let authMsgId = null;
+
 function connect() {
   if (ws) ws.close();
-  ws = new WebSocket(`ws://${HA_HOST}/api/websocket`);
-  let msgId = 1;
-  let authenticated = false;
+  authenticated = false;
+  authMsgId = null;
+  ws = new WebSocket(`ws://${MA_BASE}/ws`);
 
   ws.onopen = () => {
-    document.getElementById('ws-status').textContent = 'WS:AUTH';
+    document.getElementById('ws-status').textContent = 'WS:CONNECTING';
     document.getElementById('conn-error').classList.remove('visible');
   };
 
   ws.onmessage = (evt) => {
     const msg = JSON.parse(evt.data);
 
-    if (msg.type === 'auth_required') {
-      ws.send(JSON.stringify({ type: 'auth', access_token: HA_TOKEN }));
+    // Server info message (no message_id) — sent immediately on connect
+    if (!msg.message_id && msg.server_version) {
+      document.getElementById('ws-status').textContent = 'WS:AUTH';
+      authMsgId = sendCmd('auth', { token: MA_TOKEN });
+      return;
     }
 
-    else if (msg.type === 'auth_ok') {
-      authenticated = true;
-      document.getElementById('ws-status').textContent = 'WS:LIVE';
-
-      // Subscribe to state changes
-      ws.send(JSON.stringify({
-        id: msgId++,
-        type: 'subscribe_events',
-        event_type: 'state_changed'
-      }));
-
-      // Fetch current state immediately
-      ws.send(JSON.stringify({
-        id: msgId++,
-        type: 'get_states'
-      }));
-
-      startProgressTick();
-    }
-
-    else if (msg.type === 'auth_invalid') {
-      document.getElementById('ws-status').textContent = 'WS:AUTH_FAIL';
-    }
-
-    else if (msg.type === 'result' && msg.result) {
-      // get_states response
-      if (Array.isArray(msg.result)) {
-        const entity = msg.result.find(e => e.entity_id === SONOS_ENTITY);
-        if (entity) updateUI(entity.state, entity.attributes);
+    // Handle responses to our commands
+    if (msg.message_id) {
+      // Auth response
+      if (msg.message_id === authMsgId) {
+        if (msg.result?.authenticated) {
+          authenticated = true;
+          document.getElementById('ws-status').textContent = 'WS:LIVE';
+          fetchActivePlaying();
+          startProgressTick();
+        } else {
+          document.getElementById('ws-status').textContent = 'WS:AUTH_FAIL';
+        }
+        return;
+      }
+      // Pending callbacks
+      if (pending[msg.message_id]) {
+        pending[msg.message_id](msg.result);
+        delete pending[msg.message_id];
+        return;
       }
     }
 
-    else if (msg.type === 'event') {
-      const data = msg.event?.data;
-      if (data?.entity_id === SONOS_ENTITY && data.new_state) {
-        const ns = data.new_state;
-        currentPos = ns.attributes.media_position || currentPos;
-        updateUI(ns.state, ns.attributes);
-      }
+    // Handle events (auto-subscribed by MA)
+    if (msg.event === 'player_updated') {
+      handlePlayerUpdate(msg.data);
+    }
+    if (msg.event === 'queue_updated') {
+      handleQueueUpdate(msg.data);
+    }
+    if (msg.event === 'queue_time_updated') {
+      handleTimeUpdate(msg.data);
     }
   };
 
@@ -712,6 +742,62 @@ function connect() {
   ws.onerror = () => {
     ws.close();
   };
+}
+
+function fetchActivePlaying() {
+  sendCmdWithCallback('players/all', {}, (players) => {
+    const player = pickActivePlayer(players);
+    if (player) {
+      // Also fetch queue for shuffle/repeat
+      sendCmdWithCallback('player_queues/get_active_queue', { player_id: player.player_id }, (queue) => {
+        updateFromPlayer(player, queue);
+      });
+    } else {
+      // No active player — show idle
+      document.getElementById('idle-screen').classList.add('visible');
+      setVisualizerPlaying(false);
+    }
+  });
+}
+
+function handlePlayerUpdate(player) {
+  if (!player || !player.available) return;
+
+  // If this is our active player, update directly
+  if (player.player_id === activePlayerId) {
+    sendCmdWithCallback('player_queues/get_active_queue', { player_id: player.player_id }, (queue) => {
+      updateFromPlayer(player, queue);
+    });
+    return;
+  }
+
+  // If a new player started playing, switch to it
+  if (player.playback_state === 'playing') {
+    sendCmdWithCallback('player_queues/get_active_queue', { player_id: player.player_id }, (queue) => {
+      updateFromPlayer(player, queue);
+    });
+    return;
+  }
+
+  // If our active player stopped and this one isn't playing either, re-scan
+  if (activePlayerId && player.player_id !== activePlayerId) return;
+  fetchActivePlaying();
+}
+
+function handleQueueUpdate(queue) {
+  if (!queue || !activePlayerId) return;
+  // Update shuffle/repeat if this is the active player's queue
+  document.getElementById('pill-shuffle').classList.toggle('active', !!queue.shuffle_enabled);
+  document.getElementById('pill-repeat').classList.toggle('active', queue.repeat_mode && queue.repeat_mode !== 'off');
+}
+
+function handleTimeUpdate(data) {
+  if (!data || !activePlayerId) return;
+  // queue_time_updated gives us elapsed_time for a queue
+  if (typeof data.elapsed_time === 'number') {
+    currentPos = data.elapsed_time;
+    updateProgress();
+  }
 }
 
 connect();
