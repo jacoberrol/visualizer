@@ -889,10 +889,9 @@ function handlePlayerUpdate(player) {
 }
 
 function handleQueueUpdate(queue) {
-  if (!queue || !activePlayerId) return;
-  // Update shuffle/repeat if this is the active player's queue
-  document.getElementById('pill-shuffle').classList.toggle('active', !!queue.shuffle_enabled);
-  document.getElementById('pill-repeat').classList.toggle('active', queue.repeat_mode && queue.repeat_mode !== 'off');
+  if (!queue) return;
+  // Re-fetch track info when queue changes (e.g. song change)
+  fetchActivePlaying();
 }
 
 function handleTimeUpdate(data) {
