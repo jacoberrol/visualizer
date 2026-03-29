@@ -772,50 +772,58 @@ function connect() {
 }
 
 function fetchActivePlaying() {
-  sendCmdWithCallback('players/all', {}, (players) => {
-    const player = pickActivePlayer(players);
+  // Fetch players and all queues in parallel
+  let allPlayers = null;
+  let allQueues = null;
+
+  function resolve() {
+    if (!allPlayers || !allQueues) return;
+
+    const player = pickActivePlayer(allPlayers);
+
     if (player) {
-      sendCmdWithCallback('player_queues/get_active_queue', { player_id: player.player_id }, (queue) => {
+      // Find matching queue for this player
+      const queue = allQueues.find(q => q.queue_id === player.player_id);
+      if (queue?.current_item?.media_item) {
         updateFromPlayer(player, queue);
-      });
-    } else {
-      // No playing/paused player — check queues for last played track
-      sendCmdWithCallback('player_queues/all', {}, (queues) => {
-        const queueWithTrack = queues.find(q => q.current_item?.media_item);
-        if (queueWithTrack) {
-          // Find the matching player for display name
-          const matchPlayer = players.find(p => p.player_id === queueWithTrack.queue_id) ||
-            { player_id: queueWithTrack.queue_id, name: queueWithTrack.display_name, playback_state: 'idle', current_media: null, elapsed_time: queueWithTrack.elapsed_time, elapsed_time_last_updated: 0 };
-          updateFromPlayer(matchPlayer, queueWithTrack);
-        } else {
-          document.getElementById('idle-screen').classList.add('visible');
-          setVisualizerPlaying(false);
-        }
-      });
+        return;
+      }
     }
-  });
+
+    // No active player with rich queue data — find any queue with a track
+    const queueWithTrack = allQueues.find(q => q.current_item?.media_item);
+    if (queueWithTrack) {
+      const matchPlayer = allPlayers.find(p => p.player_id === queueWithTrack.queue_id) ||
+        { player_id: queueWithTrack.queue_id, name: queueWithTrack.display_name, playback_state: 'idle', current_media: null, elapsed_time: queueWithTrack.elapsed_time, elapsed_time_last_updated: 0 };
+      updateFromPlayer(matchPlayer, queueWithTrack);
+      return;
+    }
+
+    // Fall back to active player even without rich data
+    if (player) {
+      updateFromPlayer(player, null);
+      return;
+    }
+
+    // Nothing at all
+    document.getElementById('idle-screen').classList.add('visible');
+    setVisualizerPlaying(false);
+  }
+
+  sendCmdWithCallback('players/all', {}, (players) => { allPlayers = players; resolve(); });
+  sendCmdWithCallback('player_queues/all', {}, (queues) => { allQueues = queues; resolve(); });
 }
 
 function handlePlayerUpdate(player) {
   if (!player || !player.available) return;
 
-  // If this is our active player, update directly
-  if (player.player_id === activePlayerId) {
-    sendCmdWithCallback('player_queues/get_active_queue', { player_id: player.player_id }, (queue) => {
-      updateFromPlayer(player, queue);
-    });
+  // If this is our active player or a new player started playing, re-scan
+  if (player.player_id === activePlayerId || player.playback_state === 'playing') {
+    fetchActivePlaying();
     return;
   }
 
-  // If a new player started playing, switch to it
-  if (player.playback_state === 'playing') {
-    sendCmdWithCallback('player_queues/get_active_queue', { player_id: player.player_id }, (queue) => {
-      updateFromPlayer(player, queue);
-    });
-    return;
-  }
-
-  // If our active player stopped and this one isn't playing either, re-scan
+  // Ignore updates from other idle players
   if (activePlayerId && player.player_id !== activePlayerId) return;
   fetchActivePlaying();
 }
