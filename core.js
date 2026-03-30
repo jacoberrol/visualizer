@@ -40,6 +40,9 @@ const NP = window.NP = {
     progressBar: document.getElementById('progress-bar'),
     posCurrent:  document.getElementById('pos-current'),
     posDuration: document.getElementById('pos-duration'),
+    stateIndicator: document.getElementById('state-indicator'),
+    btnPrev:     document.getElementById('btn-prev'),
+    btnNext:     document.getElementById('btn-next'),
     pillShuffle: document.getElementById('pill-shuffle'),
     pillRepeat:  document.getElementById('pill-repeat'),
     visualizer:  document.getElementById('visualizer'),
@@ -384,6 +387,18 @@ const NP = window.NP = {
     const cmd = mediaKeyMap[e.key] ?? mediaKeyMap[e.keyCode];
     if (cmd) { e.preventDefault(); playerCmd(cmd); }
   });
+
+  // On-screen controls (d-pad navigable)
+  const bindControl = (element, command) => {
+    if (!element) return;
+    element.addEventListener('click', () => playerCmd(command));
+    element.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playerCmd(command); }
+    });
+  };
+  bindControl(el.stateIndicator, 'players/cmd/play_pause');
+  bindControl(el.btnPrev, 'players/cmd/previous');
+  bindControl(el.btnNext, 'players/cmd/next');
 
   // ── Auto-reload on deploy ───────────────────────────────────────
   let deployedVersion = null;
