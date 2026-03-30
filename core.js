@@ -464,42 +464,84 @@ const NP = window.NP = {
     xhr.send();
   };
 
-  let currentScrollTop = 0;
+  let scrollPos = 0;
+  let targetScrollPos = 0;
+  let lyricsRafId = null;
 
   const syncLyrics = () => {
     if (!lyricsLines.length || lyricsLines[0].time < 0) return;
 
-    // Offset ahead to compensate for polling lag
     const adjustedPos = currentPos + 3.5;
+    const container = el.lyricsContent;
+    const lines = container.querySelectorAll('.lyric-line');
+    if (!lines.length) return;
+
+    // Find current index and fractional progress between lines
     let idx = -1;
     for (let i = lyricsLines.length - 1; i >= 0; i--) {
       if (adjustedPos >= lyricsLines[i].time) { idx = i; break; }
     }
 
-    if (idx === activeLyricIdx) return;
-    activeLyricIdx = idx;
-
-    const lines = el.lyricsContent.querySelectorAll('.lyric-line');
-    lines.forEach((line, i) => { line.classList.toggle('active', i === idx); });
-
-    // Smoothly scroll so active line sits at 70% down the container
+    // Calculate smooth scroll target by interpolating between line positions
     if (idx >= 0 && lines[idx]) {
-      const container = el.lyricsContent;
-      const targetTop = lines[idx].offsetTop - container.offsetHeight * 0.7;
-      currentScrollTop = Math.max(0, targetTop);
-      container.scrollTo({ top: currentScrollTop, behavior: 'smooth' });
+      const anchorOffset = container.offsetHeight * 0.7;
+      const currentLineTop = lines[idx].offsetTop;
+
+      // Interpolate between current and next line for smooth movement
+      let frac = 0;
+      if (idx < lyricsLines.length - 1) {
+        const span = lyricsLines[idx + 1].time - lyricsLines[idx].time;
+        if (span > 0) frac = Math.min(1, (adjustedPos - lyricsLines[idx].time) / span);
+      }
+      const nextTop = idx < lines.length - 1 ? lines[idx + 1].offsetTop : currentLineTop;
+      const interpolatedTop = currentLineTop + (nextTop - currentLineTop) * frac;
+      targetScrollPos = Math.max(0, interpolatedTop - anchorOffset);
     }
+
+    // Update opacity for 3-line gradient highlight
+    lines.forEach((line, i) => {
+      const dist = Math.abs(i - idx);
+      if (dist === 0) {
+        line.style.opacity = '';
+        line.classList.add('active');
+        line.classList.remove('near');
+      } else if (dist === 1) {
+        line.style.opacity = '';
+        line.classList.remove('active');
+        line.classList.add('near');
+      } else {
+        line.style.opacity = '';
+        line.classList.remove('active', 'near');
+      }
+    });
+
+    activeLyricIdx = idx;
+  };
+
+  // Smooth scroll loop — runs every frame, lerps toward target
+  const lyricsScrollLoop = () => {
+    const diff = targetScrollPos - scrollPos;
+    if (Math.abs(diff) > 0.5) {
+      scrollPos += diff * 0.06;
+      el.lyricsContent.scrollTop = scrollPos;
+    }
+    lyricsRafId = requestAnimationFrame(lyricsScrollLoop);
   };
 
   // Hook into track changes to fetch lyrics
   NP.hooks.onTrackChange.push((state) => {
     fetchLyrics(state.artist, state.title);
+    scrollPos = 0;
+    targetScrollPos = 0;
   });
 
   // Hook into progress to sync lyrics
   NP.hooks.onProgress.push(() => {
     syncLyrics();
   });
+
+  // Start the smooth scroll loop
+  lyricsScrollLoop();
 
   // ── Auto-reload on deploy ───────────────────────────────────────
   let deployedVersion = null;
