@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fmt, proxyArtUrl, extractTrackData, computeElapsed, pickActivePlayer, parseLRC } from '../../lib.js';
+import { fmt, proxyArtUrl, extractTrackData, computeElapsed, pickActivePlayer, parseLRC,
+         findActiveLyricIdx, lyricFraction, lerp } from '../../lib.js';
 import {
   MA_BASE, playerPlaying, playerPaused, playerIdle, playerUnavailable,
   queuePlaying, queueIdle, sampleLRC,
@@ -208,5 +209,95 @@ Not a timestamp
     const lines = parseLRC('[00:05.00] ');
     expect(lines).toHaveLength(1);
     expect(lines[0].text).toBe('');
+  });
+});
+
+const lyricsLines = [
+  { time: 0, text: 'Line 1' },
+  { time: 5, text: 'Line 2' },
+  { time: 10, text: 'Line 3' },
+  { time: 20, text: 'Line 4' },
+];
+
+describe('findActiveLyricIdx', () => {
+  it('returns -1 before first line', () => {
+    expect(findActiveLyricIdx(lyricsLines, -1)).toBe(-1);
+  });
+
+  it('returns 0 at exactly the first timestamp', () => {
+    expect(findActiveLyricIdx(lyricsLines, 0)).toBe(0);
+  });
+
+  it('returns correct index mid-song', () => {
+    expect(findActiveLyricIdx(lyricsLines, 7)).toBe(1);
+    expect(findActiveLyricIdx(lyricsLines, 10)).toBe(2);
+    expect(findActiveLyricIdx(lyricsLines, 15)).toBe(2);
+    expect(findActiveLyricIdx(lyricsLines, 20)).toBe(3);
+  });
+
+  it('returns last index past end', () => {
+    expect(findActiveLyricIdx(lyricsLines, 999)).toBe(3);
+  });
+
+  it('returns -1 for empty array', () => {
+    expect(findActiveLyricIdx([], 5)).toBe(-1);
+  });
+});
+
+describe('lyricFraction', () => {
+  it('returns 0 at the start of a line', () => {
+    expect(lyricFraction(lyricsLines, 0, 0)).toBe(0);
+  });
+
+  it('returns 0.5 halfway between lines', () => {
+    // Line 0 at t=0, Line 1 at t=5, position=2.5
+    expect(lyricFraction(lyricsLines, 0, 2.5)).toBe(0.5);
+  });
+
+  it('returns 1 at the next line boundary', () => {
+    expect(lyricFraction(lyricsLines, 0, 5)).toBe(1);
+  });
+
+  it('clamps to 1 past the next line', () => {
+    expect(lyricFraction(lyricsLines, 0, 7)).toBe(1);
+  });
+
+  it('returns 0 on the last line', () => {
+    expect(lyricFraction(lyricsLines, 3, 25)).toBe(0);
+  });
+
+  it('returns 0 for negative index', () => {
+    expect(lyricFraction(lyricsLines, -1, 0)).toBe(0);
+  });
+
+  it('handles uneven spacing', () => {
+    // Line 2 at t=10, Line 3 at t=20, span=10, position=15 → 0.5
+    expect(lyricFraction(lyricsLines, 2, 15)).toBe(0.5);
+  });
+});
+
+describe('lerp', () => {
+  it('returns current at factor 0', () => {
+    expect(lerp(0, 100, 0)).toBe(0);
+  });
+
+  it('returns target at factor 1', () => {
+    expect(lerp(0, 100, 1)).toBe(100);
+  });
+
+  it('returns midpoint at factor 0.5', () => {
+    expect(lerp(0, 100, 0.5)).toBe(50);
+  });
+
+  it('works with negative values', () => {
+    expect(lerp(-10, 10, 0.5)).toBe(0);
+  });
+
+  it('works with small factors', () => {
+    expect(lerp(0, 100, 0.04)).toBeCloseTo(4);
+  });
+
+  it('returns current when current equals target', () => {
+    expect(lerp(50, 50, 0.5)).toBe(50);
   });
 });

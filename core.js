@@ -54,7 +54,8 @@ const NP = window.NP = {
   if (el.debugInfo) el.debugInfo.textContent = `TARGET: ws://${MA_BASE}/ws`;
 
   // ── Utilities (from lib.js) ──────────────────────────────────────
-  const { fmt, proxyArtUrl, extractTrackData, computeElapsed, pickActivePlayer, parseLRC } = window.NPLib;
+  const { fmt, proxyArtUrl, extractTrackData, computeElapsed, pickActivePlayer, parseLRC,
+          findActiveLyricIdx, lyricFraction, lerp } = window.NPLib;
   const proxyArt = (url) => proxyArtUrl(url, MA_BASE);
 
   const runHooks = (name, data) => {
@@ -435,25 +436,15 @@ const NP = window.NP = {
     const lines = container.querySelectorAll('.lyric-line');
     if (!lines.length) return;
 
-    // Find current index and fractional progress between lines
-    let idx = -1;
-    for (let i = lyricsLines.length - 1; i >= 0; i--) {
-      if (adjustedPos >= lyricsLines[i].time) { idx = i; break; }
-    }
+    const idx = findActiveLyricIdx(lyricsLines, adjustedPos);
 
     // Calculate smooth scroll target by interpolating between line positions
     if (idx >= 0 && lines[idx]) {
       const anchorOffset = container.offsetHeight * 0.7;
       const currentLineTop = lines[idx].offsetTop;
-
-      // Interpolate between current and next line for smooth movement
-      let frac = 0;
-      if (idx < lyricsLines.length - 1) {
-        const span = lyricsLines[idx + 1].time - lyricsLines[idx].time;
-        if (span > 0) frac = Math.min(1, (adjustedPos - lyricsLines[idx].time) / span);
-      }
+      const frac = lyricFraction(lyricsLines, idx, adjustedPos);
       const nextTop = idx < lines.length - 1 ? lines[idx + 1].offsetTop : currentLineTop;
-      const interpolatedTop = currentLineTop + (nextTop - currentLineTop) * frac;
+      const interpolatedTop = lerp(currentLineTop, nextTop, frac);
       targetScrollPos = Math.max(0, interpolatedTop - anchorOffset);
     }
 
@@ -490,9 +481,8 @@ const NP = window.NP = {
     // Recalculate target every frame
     syncLyrics();
 
-    const diff = targetScrollPos - scrollPos;
-    if (Math.abs(diff) > 0.3) {
-      scrollPos += diff * 0.04;
+    if (Math.abs(targetScrollPos - scrollPos) > 0.3) {
+      scrollPos = lerp(scrollPos, targetScrollPos, 0.04);
       el.lyricsContent.scrollTop = scrollPos;
     }
     lyricsRafId = requestAnimationFrame(lyricsScrollLoop);

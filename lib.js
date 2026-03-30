@@ -76,6 +76,35 @@
     return lines;
   };
 
+  /**
+   * Find the index of the active lyric line for a given position.
+   * Returns -1 if position is before the first line.
+   */
+  exports.findActiveLyricIdx = (lines, position) => {
+    let idx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (position >= lines[i].time) { idx = i; break; }
+    }
+    return idx;
+  };
+
+  /**
+   * Calculate fractional progress (0-1) between the current lyric line
+   * and the next one. Returns 0 if on the last line or span is zero.
+   */
+  exports.lyricFraction = (lines, idx, position) => {
+    if (idx < 0 || idx >= lines.length - 1) return 0;
+    const span = lines[idx + 1].time - lines[idx].time;
+    if (span <= 0) return 0;
+    return Math.min(1, (position - lines[idx].time) / span);
+  };
+
+  /**
+   * Linear interpolation: move current toward target by a factor (0-1).
+   */
+  exports.lerp = (current, target, factor) =>
+    current + (target - current) * factor;
+
   // Browser: assign to window.NPLib
   // Node/test: module.exports
 })(typeof module !== 'undefined' && module.exports ? module.exports : (window.NPLib = {}));
