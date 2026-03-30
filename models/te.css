@@ -430,6 +430,9 @@ body::after {
   opacity: 0.12;
   transition: opacity 0.6s ease;
   text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .lyric-line.active {
