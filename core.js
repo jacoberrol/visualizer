@@ -360,14 +360,28 @@ const NP = window.NP = {
   };
 
   const mediaKeyMap = {
-    'MediaPlayPause': 'players/cmd/play_pause',
-    ' ':              'players/cmd/play_pause',
-    'MediaTrackNext': 'players/cmd/next',
+    'MediaPlayPause':     'players/cmd/play_pause',
+    ' ':                  'players/cmd/play_pause',
+    'MediaTrackNext':     'players/cmd/next',
     'MediaTrackPrevious': 'players/cmd/previous',
+    // keyCode fallbacks for Fire TV remote
+    179: 'players/cmd/play_pause',   // MediaPlayPause
+    176: 'players/cmd/next',         // MediaTrackNext
+    177: 'players/cmd/previous',     // MediaTrackPrevious
+    85:  'players/cmd/play_pause',   // Play/Pause alt
+    87:  'players/cmd/next',         // Next alt
+    88:  'players/cmd/previous',     // Previous alt
   };
 
   document.addEventListener('keydown', (e) => {
-    const cmd = mediaKeyMap[e.key];
+    // Debug: show key info temporarily (remove once keys are mapped)
+    if (el.debugInfo) {
+      el.debugInfo.textContent = `KEY: ${e.key} code: ${e.keyCode} which: ${e.which}`;
+      el.debugInfo.style.display = 'block';
+      el.debugInfo.style.opacity = '0.8';
+    }
+
+    const cmd = mediaKeyMap[e.key] ?? mediaKeyMap[e.keyCode];
     if (cmd) { e.preventDefault(); playerCmd(cmd); }
   });
 
