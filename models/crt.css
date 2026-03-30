@@ -450,7 +450,7 @@ body::after {
   font-size: 18px;
   line-height: 2;
   color: var(--accent);
-  opacity: 0.06;
+  opacity: 0.12;
   transition: opacity 1.2s ease;
   text-align: right;
   letter-spacing: 1px;
@@ -460,11 +460,11 @@ body::after {
 }
 
 .lyric-line.near {
-  opacity: 0.18;
+  opacity: 0.35;
 }
 
 .lyric-line.active {
-  opacity: 0.35;
+  opacity: 0.55;
 }
 
 /* Smaller viewports (720p TVs, browsers with chrome eating space) */
