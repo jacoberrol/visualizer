@@ -357,16 +357,16 @@ const NP = window.NP = {
   };
 
   // ── Media controls (remote/keyboard) ─────────────────────────────
+  const debugMsg = (msg) => {
+    const target = document.getElementById('data-stream');
+    if (target) target.textContent = msg;
+  };
+
   const playerCmd = (command) => {
-    // Debug: show what's happening
-    if (el.debugInfo) {
-      const reason = !activePlayerId ? 'NO PLAYER' :
-        !authenticated ? 'NOT AUTHED' :
-        ws?.readyState !== WebSocket.OPEN ? 'WS CLOSED' : 'SENDING';
-      el.debugInfo.textContent = `CMD: ${command} → ${reason} (pid: ${activePlayerId || 'none'})`;
-      el.debugInfo.style.display = 'block';
-      el.debugInfo.style.opacity = '0.8';
-    }
+    const reason = !activePlayerId ? 'NO PLAYER' :
+      !authenticated ? 'NOT AUTHED' :
+      ws?.readyState !== WebSocket.OPEN ? 'WS CLOSED' : 'OK';
+    debugMsg(`${command} → ${reason}`);
     if (!activePlayerId || !authenticated || ws?.readyState !== WebSocket.OPEN) return;
     send(command, { player_id: activePlayerId });
   };
@@ -386,12 +386,7 @@ const NP = window.NP = {
   };
 
   document.addEventListener('keydown', (e) => {
-    // Debug: show key info temporarily (remove once keys are mapped)
-    if (el.debugInfo) {
-      el.debugInfo.textContent = `KEY: ${e.key} code: ${e.keyCode} which: ${e.which}`;
-      el.debugInfo.style.display = 'block';
-      el.debugInfo.style.opacity = '0.8';
-    }
+    debugMsg(`KEY: ${e.key} (${e.keyCode}) target: ${document.activeElement?.id || document.activeElement?.tagName}`);
 
     const cmd = mediaKeyMap[e.key] ?? mediaKeyMap[e.keyCode];
     if (cmd) { e.preventDefault(); playerCmd(cmd); }
@@ -400,17 +395,11 @@ const NP = window.NP = {
   // On-screen controls (d-pad navigable)
   const bindControl = (element, command) => {
     if (!element) return;
-    element.addEventListener('click', () => {
-      if (el.debugInfo) { el.debugInfo.textContent = `CLICK: ${command}`; el.debugInfo.style.display = 'block'; el.debugInfo.style.opacity = '0.8'; }
-      playerCmd(command);
-    });
+    element.addEventListener('click', () => { debugMsg(`CLICK: ${command}`); playerCmd(command); });
     element.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        if (el.debugInfo) { el.debugInfo.textContent = `KEYDOWN: ${e.key} → ${command}`; el.debugInfo.style.display = 'block'; el.debugInfo.style.opacity = '0.8'; }
-        playerCmd(command);
-      }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); debugMsg(`KEY: ${e.key} → ${command}`); playerCmd(command); }
     });
+    element.addEventListener('focus', () => { debugMsg(`FOCUS: ${element.id || element.className}`); });
   };
   bindControl(el.stateIndicator, 'players/cmd/play_pause');
   bindControl(el.btnPrev, 'players/cmd/previous');
