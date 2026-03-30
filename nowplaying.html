@@ -61,7 +61,6 @@
 </div>
 
 <div id="conn-error">WS DISCONNECTED — RECONNECTING...</div>
-<div id="lyrics-debug" style="position:fixed;bottom:4px;left:4px;font-size:14px;color:red;z-index:9999;background:black;padding:4px 8px;">DEBUG: HTML LOADED</div>
 <div id="debug-info" style="position:fixed;top:40px;left:60px;font-size:11px;opacity:0.4;letter-spacing:2px;z-index:200;"></div>
 
 <div id="app">
@@ -128,9 +127,7 @@
 </div>
 
 <script src="config.js?v=__VERSION__"></script>
-<script>document.getElementById('lyrics-debug').textContent = 'DEBUG: config loaded, MA_TOKEN=' + (typeof MA_TOKEN !== 'undefined' ? 'yes' : 'no');</script>
-<script src="core.js?v=__VERSION__" onerror="document.getElementById('lyrics-debug').textContent='DEBUG: core.js FAILED TO LOAD'"></script>
-<script>document.getElementById('lyrics-debug').textContent += ' | core.js parsed';</script>
+<script src="core.js?v=__VERSION__"></script>
 <script>
   // Load model-specific JS
   (function() {

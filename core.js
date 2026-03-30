@@ -19,7 +19,6 @@ const NP = window.NP = {
 
 // ── IIFE: all internals stay private ────────────────────────────────
 (function () {
-  document.getElementById('lyrics-debug').textContent = 'IIFE RUNNING';
   try {
   const MA_BASE = typeof MA_HOST !== 'undefined' ? MA_HOST : HA_HOST.replace(':8123', ':8095');
 
@@ -50,7 +49,6 @@ const NP = window.NP = {
     visualizer:  document.getElementById('visualizer'),
     lyricsOverlay: document.getElementById('lyrics-overlay'),
     lyricsContent: document.getElementById('lyrics-content'),
-    lyricsDebug:   document.getElementById('lyrics-debug'),
   };
 
   if (el.debugInfo) el.debugInfo.textContent = `TARGET: ws://${MA_BASE}/ws`;
@@ -411,7 +409,6 @@ const NP = window.NP = {
   bindControl(el.btnNext, 'players/cmd/next');
 
   // ── Lyrics (LRCLIB) ──────────────────────────────────────────────
-  el.lyricsDebug.textContent = 'LYRICS: init start';
   let lyricsLines = [];      // [{ time: seconds, text: string }]
   let lyricsTrackKey = null;  // "artist|title" to detect track changes
   let activeLyricIdx = -1;
@@ -438,19 +435,17 @@ const NP = window.NP = {
     el.lyricsOverlay.classList.remove('has-lyrics');
 
     const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
-    el.lyricsDebug.textContent = `LYRICS: fetching...`;
 
     const xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     xhr.onload = () => {
       if (xhr.status !== 200) {
-        el.lyricsDebug.textContent = `LYRICS: HTTP ${xhr.status}`;
         return;
       }
       try {
         const data = JSON.parse(xhr.responseText);
         const lrc = data.syncedLyrics || data.plainLyrics;
-        if (!lrc) { el.entityId.textContent = 'LYRICS: none found'; return; }
+        if (!lrc) return;
 
         if (data.syncedLyrics) {
           lyricsLines = parseLRC(data.syncedLyrics);
@@ -462,12 +457,10 @@ const NP = window.NP = {
           .map((l, i) => `<div class="lyric-line" data-idx="${i}">${l.text || '&nbsp;'}</div>`)
           .join('');
         el.lyricsOverlay.classList.add('has-lyrics');
-        el.lyricsDebug.textContent = `LYRICS: ${lyricsLines.length} lines`;
       } catch (e) {
-        el.lyricsDebug.textContent = `LYRICS: parse err`;
       }
     };
-    xhr.onerror = () => { el.entityId.textContent = 'LYRICS: network err'; };
+    xhr.onerror = () => {};
     xhr.send();
   };
 
@@ -491,14 +484,12 @@ const NP = window.NP = {
 
     // Scroll active line into view
     if (idx >= 0 && lines[idx]) {
-      lines[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      lines[idx].scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   };
 
   // Hook into track changes to fetch lyrics
-  el.lyricsDebug.textContent = 'LYRICS: hook registered';
   NP.hooks.onTrackChange.push((state) => {
-    el.lyricsDebug.textContent = `LYRICS: hook fired for ${state.artist} - ${state.title}`;
     fetchLyrics(state.artist, state.title);
   });
 
@@ -521,7 +512,6 @@ const NP = window.NP = {
   // ── Boot ────────────────────────────────────────────────────────
   connect();
   } catch(e) {
-    var d = document.getElementById('lyrics-debug');
-    if (d) d.textContent = 'JS ERROR: ' + e.message + ' at ' + (e.stack || '').split('\n')[1];
+    console.error('core.js error:', e);
   }
 })();
