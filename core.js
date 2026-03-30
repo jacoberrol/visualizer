@@ -469,9 +469,11 @@ const NP = window.NP = {
   const syncLyrics = () => {
     if (!lyricsLines.length || lyricsLines[0].time < 0) return;
 
+    // Offset ahead to compensate for polling lag
+    const adjustedPos = currentPos + 2.5;
     let idx = -1;
     for (let i = lyricsLines.length - 1; i >= 0; i--) {
-      if (currentPos >= lyricsLines[i].time) { idx = i; break; }
+      if (adjustedPos >= lyricsLines[i].time) { idx = i; break; }
     }
 
     if (idx === activeLyricIdx) return;
