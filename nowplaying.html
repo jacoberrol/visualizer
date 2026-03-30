@@ -10,6 +10,17 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; }
+  #state-indicator, #btn-prev, #btn-next {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #state-indicator:hover, #state-indicator:focus,
+  #btn-prev:hover, #btn-prev:focus,
+  #btn-next:hover, #btn-next:focus {
+    opacity: 1 !important;
+    outline: none;
+  }
   #theme-selector {
     cursor: pointer;
     opacity: 0.35;
@@ -88,10 +99,12 @@
       </div>
 
       <div id="status-row">
-        <div id="state-indicator">
+        <div id="btn-prev" class="status-pill" tabindex="0" role="button">PREV</div>
+        <div id="state-indicator" tabindex="0" role="button">
           <div id="state-dot"></div>
           <span id="state-text">IDLE</span>
         </div>
+        <div id="btn-next" class="status-pill" tabindex="0" role="button">NEXT</div>
         <div class="status-pill" id="pill-shuffle">SHUFFLE</div>
         <div class="status-pill" id="pill-repeat">REPEAT</div>
       </div>
