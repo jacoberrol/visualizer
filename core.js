@@ -19,6 +19,7 @@ const NP = window.NP = {
 
 // ── IIFE: all internals stay private ────────────────────────────────
 (function () {
+  try {
   const MA_BASE = typeof MA_HOST !== 'undefined' ? MA_HOST : HA_HOST.replace(':8123', ':8095');
 
   // ── DOM cache ───────────────────────────────────────────────────
@@ -518,4 +519,8 @@ const NP = window.NP = {
 
   // ── Boot ────────────────────────────────────────────────────────
   connect();
+  } catch(e) {
+    var d = document.getElementById('lyrics-debug');
+    if (d) d.textContent = 'JS ERROR: ' + e.message + ' at ' + (e.stack || '').split('\n')[1];
+  }
 })();
