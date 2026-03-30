@@ -7,285 +7,300 @@ if (typeof MA_TOKEN === 'undefined') {
   throw new Error('config.js not loaded');
 }
 
-// Public namespace for model JS to hook into
-var NP = window.NP = {
-  hooks: {
-    onTrackChange: [],
-    onStateChange: [],
-    onProgress: [],
-  },
+// ── Public API ──────────────────────────────────────────────────────
+const NP = window.NP = {
+  hooks: { onTrackChange: [], onStateChange: [], onProgress: [] },
   state: {
-    isPlaying: false,
-    title: '',
-    artist: '',
-    album: '',
-    artUrl: '',
-    position: 0,
-    duration: 0,
-    source: '',
-    playerName: '',
-    shuffleEnabled: false,
-    repeatEnabled: false,
-    playbackState: 'idle',
-  }
+    isPlaying: false, title: '', artist: '', album: '', artUrl: '',
+    position: 0, duration: 0, source: '', playerName: '',
+    shuffleEnabled: false, repeatEnabled: false, playbackState: 'idle',
+  },
 };
 
-function runHooks(name, data) {
-  var hooks = NP.hooks[name] || [];
-  for (var i = 0; i < hooks.length; i++) {
-    try { hooks[i](data); } catch(e) { console.error('Hook error:', e); }
+// ── IIFE: all internals stay private ────────────────────────────────
+(function () {
+  const MA_BASE = typeof MA_HOST !== 'undefined' ? MA_HOST : HA_HOST.replace(':8123', ':8095');
+
+  // ── DOM cache ───────────────────────────────────────────────────
+  const el = {
+    debugInfo:   document.getElementById('debug-info'),
+    clock:       document.getElementById('clock'),
+    wsStatus:    document.getElementById('ws-status'),
+    connError:   document.getElementById('conn-error'),
+    idleScreen:  document.getElementById('idle-screen'),
+    trackTitle:  document.getElementById('track-title'),
+    trackArtist: document.getElementById('track-artist'),
+    trackAlbum:  document.getElementById('track-album'),
+    stateText:   document.getElementById('state-text'),
+    stateDot:    document.getElementById('state-dot'),
+    entityId:    document.getElementById('entity-id'),
+    mediaSource: document.getElementById('media-source'),
+    albumArt:    document.getElementById('album-art'),
+    artBg:       document.getElementById('art-bg'),
+    progressBar: document.getElementById('progress-bar'),
+    posCurrent:  document.getElementById('pos-current'),
+    posDuration: document.getElementById('pos-duration'),
+    pillShuffle: document.getElementById('pill-shuffle'),
+    pillRepeat:  document.getElementById('pill-repeat'),
+    visualizer:  document.getElementById('visualizer'),
+  };
+
+  if (el.debugInfo) el.debugInfo.textContent = `TARGET: ws://${MA_BASE}/ws`;
+
+  // ── Utilities ───────────────────────────────────────────────────
+  const fmt = (s) => {
+    s = Math.floor(s || 0);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+  };
+
+  const proxyArtUrl = (url) =>
+    url ? `http://${MA_BASE}/imageproxy?path=${encodeURIComponent(url)}&size=500` : '';
+
+  const runHooks = (name, data) => {
+    for (const fn of NP.hooks[name] ?? []) {
+      try { fn(data); } catch (e) { console.error('Hook error:', e); }
+    }
+  };
+
+  // ── Visualizer ──────────────────────────────────────────────────
+  const BAR_COUNT = 32;
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.setProperty('--max-h', `${Math.floor(Math.random() * 34) + 6}px`);
+    bar.style.animationDuration = `${(Math.random() * 0.5 + 0.2).toFixed(2)}s`;
+    bar.style.animationDelay = `${(Math.random() * 0.3).toFixed(2)}s`;
+    el.visualizer.appendChild(bar);
   }
-}
 
-var MA_BASE = typeof MA_HOST !== 'undefined' ? MA_HOST : HA_HOST.replace(':8123', ':8095');
-var debugEl = document.getElementById('debug-info');
-if (debugEl) debugEl.textContent = 'TARGET: ws://' + MA_BASE + '/ws';
+  const setVisualizerPlaying = (playing) => {
+    const state = playing ? 'running' : 'paused';
+    el.visualizer.querySelectorAll('.bar').forEach(b => { b.style.animationPlayState = state; });
+  };
 
-var ws = null;
-var reconnectTimer = null;
-var progressInterval = null;
-var currentPos = 0;
-var currentDuration = 0;
-var posLastUpdated = 0;
-var isPlaying = false;
-var activePlayerId = null;
-var msgCounter = 0;
+  // ── Clock ───────────────────────────────────────────────────────
+  const updateClock = () => { el.clock.textContent = new Date().toTimeString().slice(0, 8); };
+  setInterval(updateClock, 1000);
+  updateClock();
 
-// Build visualizer bars
-var viz = document.getElementById('visualizer');
-var BAR_COUNT = 32;
-for (var i = 0; i < BAR_COUNT; i++) {
-  var b = document.createElement('div');
-  b.className = 'bar';
-  var maxH = Math.floor(Math.random() * 34) + 6;
-  b.style.setProperty('--max-h', maxH + 'px');
-  b.style.animationDuration = (Math.random() * 0.5 + 0.2) + 's';
-  b.style.animationDelay = (Math.random() * 0.3) + 's';
-  viz.appendChild(b);
-}
+  // ── Progress ────────────────────────────────────────────────────
+  let currentPos = 0;
+  let currentDuration = 0;
+  let lastProgressPct = 0;
+  let progressInterval = null;
+  let isPlaying = false;
 
-function setVisualizerPlaying(playing) {
-  viz.querySelectorAll('.bar').forEach(function(b) {
-    b.style.animationPlayState = playing ? 'running' : 'paused';
-  });
-}
+  const updateProgress = () => {
+    if (currentDuration <= 0) return;
+    const pct = Math.min((currentPos / currentDuration) * 100, 100);
 
-// Clock
-function updateClock() {
-  var now = new Date();
-  document.getElementById('clock').textContent = now.toTimeString().slice(0, 8);
-}
-setInterval(updateClock, 1000);
-updateClock();
+    // Snap (no transition) when progress jumps backwards (track change)
+    if (pct < lastProgressPct - 5) {
+      el.progressBar.style.transition = 'none';
+      el.progressBar.style.width = `${pct}%`;
+      el.progressBar.offsetWidth; // force reflow
+      el.progressBar.style.transition = '';
+    } else {
+      el.progressBar.style.width = `${pct}%`;
+    }
 
-// Format seconds
-function fmt(s) {
-  s = Math.floor(s || 0);
-  var m = Math.floor(s / 60);
-  var sec = s % 60;
-  return m + ':' + (sec < 10 ? '0' : '') + sec;
-}
+    lastProgressPct = pct;
+    el.posCurrent.textContent = fmt(currentPos);
+    el.posDuration.textContent = fmt(currentDuration);
+    NP.state.position = currentPos;
+    runHooks('onProgress', NP.state);
+  };
 
-// Pick the best player: first playing, else first paused, else null
-function pickActivePlayer(players) {
-  var playing = players.find(function(p) { return p.available && p.playback_state === 'playing'; });
-  if (playing) return playing;
-  var paused = players.find(function(p) { return p.available && p.playback_state === 'paused'; });
-  if (paused) return paused;
-  return null;
-}
+  const startProgressTick = () => {
+    clearInterval(progressInterval);
+    progressInterval = setInterval(() => {
+      if (isPlaying) { currentPos += 1; updateProgress(); }
+    }, 1000);
+  };
 
-// Track last known good display data so we can show "last played" when idle
-var lastKnownMedia = null;
+  // ── Track data extraction ───────────────────────────────────────
+  const extractTrackData = (media, player, queue) => {
+    // Prefer queue metadata when the queue is actively playing.
+    // Spotify Connect bypasses MA's queue, leaving it idle/stale.
+    const queueIsActive = queue?.state === 'playing';
+    const queueItem = queueIsActive ? queue?.current_item : null;
+    const trackInfo = queueItem?.media_item;
 
-function updateFromPlayer(player, queue) {
-  var media = player.current_media;
-  var state = player.playback_state || 'idle';
-  var hasQueueTrack = !!(queue && queue.current_item && queue.current_item.media_item);
-  var hasMedia = hasQueueTrack || (media && media.title);
+    const title    = trackInfo?.name ?? queueItem?.name ?? media?.title ?? '—';
+    const artists  = trackInfo?.artists;
+    const artist   = artists?.length ? artists.map(a => a.name).join(', ') : (media?.artist ?? '—');
+    const album    = trackInfo?.album?.name ?? media?.album ?? '—';
+    const artUrl   = proxyArtUrl(queueItem?.image?.path ?? media?.image_url ?? '');
+    const duration = queueItem?.duration ?? media?.duration ?? 0;
+    const source   = media?.source_id ?? media?.uri ?? '—';
 
-  isPlaying = state === 'playing';
-  activePlayerId = player.player_id;
+    return { title, artist, album, artUrl, duration, source };
+  };
 
-  if (hasMedia) {
-    lastKnownMedia = { media: media, player: player, queue: queue };
-    renderTrackInfo(state, media, player, queue);
-  } else if (lastKnownMedia) {
-    renderTrackInfo(state, lastKnownMedia.media, player, lastKnownMedia.queue);
-  } else {
-    document.getElementById('idle-screen').classList.add('visible');
+  const computeElapsed = (player) => {
+    const elapsed = player.elapsed_time ?? 0;
+    const lastUpdated = player.elapsed_time_last_updated ?? 0;
+    if (isPlaying && lastUpdated > 0) {
+      return elapsed + (Date.now() / 1000 - lastUpdated);
+    }
+    return elapsed;
+  };
+
+  // ── DOM rendering ───────────────────────────────────────────────
+  const renderTrack = (track, state, player, queue) => {
+    el.trackTitle.textContent = track.title;
+    el.trackArtist.textContent = track.artist;
+    el.trackAlbum.textContent = track.album;
+    el.stateText.textContent = state.toUpperCase();
+    el.entityId.textContent = `PLAYER: ${player.name.toUpperCase()}`;
+    el.mediaSource.textContent = track.source.length > 60
+      ? track.source.slice(0, 60) + '…' : track.source;
+
+    if (track.artUrl) {
+      el.albumArt.src = track.artUrl;
+      el.artBg.style.backgroundImage = `url('${track.artUrl}')`;
+    }
+
+    const shuffleOn = !!queue?.shuffle_enabled;
+    const repeatOn  = !!(queue?.repeat_mode && queue.repeat_mode !== 'off');
+    el.pillShuffle.classList.toggle('active', shuffleOn);
+    el.pillRepeat.classList.toggle('active', repeatOn);
+
+    el.stateDot.style.background = isPlaying ? 'var(--accent)' : 'var(--warning)';
+    el.stateDot.style.boxShadow  = isPlaying ? '0 0 8px var(--accent)' : '0 0 8px var(--warning)';
+
+    setVisualizerPlaying(isPlaying);
+    el.idleScreen.classList.remove('visible');
+    updateProgress();
+
+    // Sync public state
+    Object.assign(NP.state, {
+      isPlaying, playbackState: state,
+      title: track.title, artist: track.artist, album: track.album,
+      artUrl: track.artUrl, position: currentPos, duration: currentDuration,
+      source: track.source, playerName: player.name,
+      shuffleEnabled: shuffleOn, repeatEnabled: repeatOn,
+    });
+    runHooks('onTrackChange', NP.state);
+  };
+
+  // ── Player state management ─────────────────────────────────────
+  let activePlayerId = null;
+  let lastKnownMedia = null;
+
+  const showIdle = () => {
+    el.idleScreen.classList.add('visible');
     setVisualizerPlaying(false);
     NP.state.playbackState = 'idle';
     runHooks('onStateChange', NP.state);
-  }
-}
-
-// Proxy album art through Music Assistant so devices that can't reach
-// the media server directly (e.g. Fire TV without Tailscale) still load art.
-function proxyArtUrl(url) {
-  if (!url) return '';
-  return 'http://' + MA_BASE + '/imageproxy?path=' + encodeURIComponent(url) + '&size=500';
-}
-
-function renderTrackInfo(state, media, player, queue) {
-  // When the player is active but the queue is idle/stale (e.g. Spotify Connect
-  // bypasses MA's queue), trust the player's current_media over queue data.
-  var queueIsActive = queue && queue.state === 'playing';
-  var queueItem = queueIsActive ? queue.current_item : null;
-  var trackInfo = queueItem && queueItem.media_item ? queueItem.media_item : null;
-
-  var title = (trackInfo && trackInfo.name) || (queueItem && queueItem.name) || (media && media.title) || '—';
-  var artists = trackInfo && trackInfo.artists;
-  var artist = (artists && artists.length) ? artists.map(function(a) { return a.name; }).join(', ') : ((media && media.artist) || '—');
-  var album = (trackInfo && trackInfo.album && trackInfo.album.name) || (media && media.album) || '—';
-  var rawArtUrl = (queueItem && queueItem.image && queueItem.image.path) || (media && media.image_url) || '';
-  var artUrl = proxyArtUrl(rawArtUrl);
-  var duration = (queueItem && queueItem.duration) || (media && media.duration) || 0;
-  var source = (media && media.source_id) || (media && media.uri) || '—';
-
-  isPlaying = state === 'playing';
-
-  // Compute elapsed time
-  var elapsed = player.elapsed_time || 0;
-  var lastUpdated = player.elapsed_time_last_updated || 0;
-  if (isPlaying && lastUpdated > 0) {
-    var now = Date.now() / 1000;
-    currentPos = elapsed + (now - lastUpdated);
-  } else {
-    currentPos = elapsed;
-  }
-  currentDuration = duration;
-  posLastUpdated = lastUpdated;
-
-  // Update DOM
-  document.getElementById('track-title').textContent = title;
-  document.getElementById('track-artist').textContent = artist;
-  document.getElementById('track-album').textContent = album;
-  document.getElementById('state-text').textContent = state.toUpperCase();
-  document.getElementById('entity-id').textContent = 'PLAYER: ' + player.name.toUpperCase();
-  var sourceText = source.length > 60 ? source.slice(0, 60) + '…' : source;
-  document.getElementById('media-source').textContent = sourceText;
-
-  // Album art
-  if (artUrl) {
-    document.getElementById('album-art').src = artUrl;
-    document.getElementById('art-bg').style.backgroundImage = "url('" + artUrl + "')";
-  }
-
-  updateProgress();
-
-  // Shuffle / repeat
-  var shuffleOn = !!(queue && queue.shuffle_enabled);
-  var repeatOn = !!(queue && queue.repeat_mode && queue.repeat_mode !== 'off');
-  document.getElementById('pill-shuffle').classList.toggle('active', shuffleOn);
-  document.getElementById('pill-repeat').classList.toggle('active', repeatOn);
-
-  // Visualizer
-  setVisualizerPlaying(isPlaying);
-
-  // Hide idle screen
-  document.getElementById('idle-screen').classList.remove('visible');
-
-  // State dot color
-  var dot = document.getElementById('state-dot');
-  dot.style.background = isPlaying ? 'var(--accent)' : 'var(--warning)';
-  dot.style.boxShadow = isPlaying ? '0 0 8px var(--accent)' : '0 0 8px var(--warning)';
-
-  // Update public state and fire hooks
-  NP.state.isPlaying = isPlaying;
-  NP.state.title = title;
-  NP.state.artist = artist;
-  NP.state.album = album;
-  NP.state.artUrl = artUrl;
-  NP.state.position = currentPos;
-  NP.state.duration = currentDuration;
-  NP.state.source = source;
-  NP.state.playerName = player.name;
-  NP.state.shuffleEnabled = shuffleOn;
-  NP.state.repeatEnabled = repeatOn;
-  NP.state.playbackState = state;
-  runHooks('onTrackChange', NP.state);
-}
-
-var lastProgressPct = 0;
-function updateProgress() {
-  if (currentDuration <= 0) return;
-  var pct = Math.min((currentPos / currentDuration) * 100, 100);
-  var bar = document.getElementById('progress-bar');
-  // Skip transition when progress jumps backwards (track change)
-  if (pct < lastProgressPct - 5) {
-    bar.style.transition = 'none';
-    bar.style.width = pct + '%';
-    bar.offsetWidth; // force reflow
-    bar.style.transition = '';
-  } else {
-    bar.style.width = pct + '%';
-  }
-  lastProgressPct = pct;
-  document.getElementById('pos-current').textContent = fmt(currentPos);
-  document.getElementById('pos-duration').textContent = fmt(currentDuration);
-  NP.state.position = currentPos;
-  runHooks('onProgress', NP.state);
-}
-
-function startProgressTick() {
-  clearInterval(progressInterval);
-  progressInterval = setInterval(function() {
-    if (isPlaying) {
-      currentPos += 1;
-      updateProgress();
-    }
-  }, 1000);
-}
-
-function sendCmd(command, args) {
-  var id = 'msg-' + (++msgCounter);
-  ws.send(JSON.stringify({ message_id: id, command: command, args: args || {} }));
-  return id;
-}
-
-// Store pending response callbacks
-var pending = {};
-function sendCmdWithCallback(command, args, callback) {
-  var id = 'msg-' + (++msgCounter);
-  pending[id] = callback;
-  ws.send(JSON.stringify({ message_id: id, command: command, args: args || {} }));
-}
-
-// WebSocket connection to Music Assistant
-var authenticated = false;
-var authMsgId = null;
-
-function connect() {
-  if (ws) ws.close();
-  authenticated = false;
-  authMsgId = null;
-  ws = new WebSocket('ws://' + MA_BASE + '/ws');
-
-  ws.onopen = function() {
-    document.getElementById('ws-status').textContent = 'WS:CONNECTING';
-    document.getElementById('conn-error').classList.remove('visible');
   };
 
-  ws.onmessage = function(evt) {
-    var msg = JSON.parse(evt.data);
+  const updateFromPlayer = (player, queue) => {
+    const state = player.playback_state ?? 'idle';
+    const media = player.current_media;
+    const hasMedia = !!queue?.current_item?.media_item || !!(media?.title);
 
+    isPlaying = state === 'playing';
+    activePlayerId = player.player_id;
+
+    // Use current data, fall back to last known, or show idle
+    const source = hasMedia
+      ? (lastKnownMedia = { media, player, queue })
+      : lastKnownMedia;
+    if (!source) return showIdle();
+
+    const track = extractTrackData(source.media, player, source.queue);
+    currentPos = computeElapsed(player);
+    currentDuration = track.duration;
+    renderTrack(track, state, player, source.queue);
+  };
+
+  const pickActivePlayer = (players) =>
+    players.find(p => p.available && p.playback_state === 'playing') ??
+    players.find(p => p.available && p.playback_state === 'paused') ??
+    null;
+
+  // ── WebSocket ───────────────────────────────────────────────────
+  let ws = null;
+  let authenticated = false;
+  let authMsgId = null;
+  let msgCounter = 0;
+  let reconnectTimer = null;
+  const pending = {};
+
+  const send = (command, args) => {
+    const id = `msg-${++msgCounter}`;
+    ws.send(JSON.stringify({ message_id: id, command, args: args ?? {} }));
+    return id;
+  };
+
+  const sendWithCallback = (command, args, callback) => {
+    const id = `msg-${++msgCounter}`;
+    pending[id] = callback;
+    ws.send(JSON.stringify({ message_id: id, command, args: args ?? {} }));
+  };
+
+  const fetchActivePlaying = () => {
+    let allPlayers = null;
+    let allQueues = null;
+
+    const resolve = () => {
+      if (!allPlayers || !allQueues) return;
+
+      const player = pickActivePlayer(allPlayers);
+      if (player) {
+        const queue = allQueues.find(q => q.queue_id === player.player_id);
+        if (queue?.current_item?.media_item) return updateFromPlayer(player, queue);
+      }
+
+      const queueWithTrack = allQueues.find(q => q.current_item?.media_item);
+      if (queueWithTrack) {
+        const matchPlayer = allPlayers.find(p => p.player_id === queueWithTrack.queue_id) ?? {
+          player_id: queueWithTrack.queue_id, name: queueWithTrack.display_name,
+          playback_state: 'idle', current_media: null,
+          elapsed_time: queueWithTrack.elapsed_time, elapsed_time_last_updated: 0,
+        };
+        return updateFromPlayer(matchPlayer, queueWithTrack);
+      }
+
+      if (player) return updateFromPlayer(player, null);
+      showIdle();
+    };
+
+    sendWithCallback('players/all', {}, players => { allPlayers = players; resolve(); });
+    sendWithCallback('player_queues/all', {}, queues => { allQueues = queues; resolve(); });
+  };
+
+  const onPlayerUpdated = (player) => {
+    if (!player?.available) return;
+    if (player.player_id === activePlayerId || player.playback_state === 'playing') return fetchActivePlaying();
+    if (activePlayerId && player.player_id !== activePlayerId) return;
+    fetchActivePlaying();
+  };
+
+  const onMessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+
+    // Server info → authenticate
     if (!msg.message_id && msg.server_version) {
-      document.getElementById('ws-status').textContent = 'WS:AUTH';
-      authMsgId = sendCmd('auth', { token: MA_TOKEN });
+      el.wsStatus.textContent = 'WS:AUTH';
+      authMsgId = send('auth', { token: MA_TOKEN });
       return;
     }
 
+    // Response to a command we sent
     if (msg.message_id) {
       if (msg.message_id === authMsgId) {
-        if (msg.result && msg.result.authenticated) {
+        if (msg.result?.authenticated) {
           authenticated = true;
-          document.getElementById('ws-status').textContent = 'WS:LIVE';
+          el.wsStatus.textContent = 'WS:LIVE';
           fetchActivePlaying();
           startProgressTick();
           startPolling();
         } else {
-          document.getElementById('ws-status').textContent = 'WS:AUTH_FAIL';
+          el.wsStatus.textContent = 'WS:AUTH_FAIL';
         }
         return;
       }
@@ -296,121 +311,59 @@ function connect() {
       }
     }
 
-    if (msg.event === 'player_updated') handlePlayerUpdate(msg.data);
-    if (msg.event === 'queue_updated') handleQueueUpdate(msg.data);
-    if (msg.event === 'queue_time_updated') handleTimeUpdate(msg.data);
+    // Push events
+    if (msg.event === 'player_updated')     onPlayerUpdated(msg.data);
+    if (msg.event === 'queue_updated')       msg.data && fetchActivePlaying();
+    if (msg.event === 'queue_time_updated' && msg.data?.elapsed_time != null) {
+      currentPos = msg.data.elapsed_time;
+      updateProgress();
+    }
   };
 
-  ws.onclose = function(e) {
-    document.getElementById('ws-status').textContent = 'WS:DOWN (' + e.code + ')';
-    document.getElementById('conn-error').classList.add('visible');
-    clearInterval(progressInterval);
-    clearInterval(pollTimer);
-    reconnectTimer = setTimeout(connect, 5000);
-  };
+  const connect = () => {
+    if (ws) ws.close();
+    authenticated = false;
+    authMsgId = null;
+    ws = new WebSocket(`ws://${MA_BASE}/ws`);
 
-  ws.onerror = function() {
-    document.getElementById('ws-status').textContent = 'WS:ERR ' + MA_BASE;
-    ws.close();
-  };
-}
-
-var pollTimer = null;
-function startPolling() {
-  clearInterval(pollTimer);
-  pollTimer = setInterval(function() {
-    if (authenticated && ws && ws.readyState === WebSocket.OPEN) {
-      fetchActivePlaying();
-    }
-  }, 5000);
-}
-
-function fetchActivePlaying() {
-  var allPlayers = null;
-  var allQueues = null;
-
-  function resolve() {
-    if (!allPlayers || !allQueues) return;
-
-    var player = pickActivePlayer(allPlayers);
-
-    if (player) {
-      var queue = allQueues.find(function(q) { return q.queue_id === player.player_id; });
-      if (queue && queue.current_item && queue.current_item.media_item) {
-        updateFromPlayer(player, queue);
-        return;
-      }
-    }
-
-    var queueWithTrack = allQueues.find(function(q) { return q.current_item && q.current_item.media_item; });
-    if (queueWithTrack) {
-      var matchPlayer = allPlayers.find(function(p) { return p.player_id === queueWithTrack.queue_id; }) ||
-        { player_id: queueWithTrack.queue_id, name: queueWithTrack.display_name, playback_state: 'idle', current_media: null, elapsed_time: queueWithTrack.elapsed_time, elapsed_time_last_updated: 0 };
-      updateFromPlayer(matchPlayer, queueWithTrack);
-      return;
-    }
-
-    if (player) {
-      updateFromPlayer(player, null);
-      return;
-    }
-
-    document.getElementById('idle-screen').classList.add('visible');
-    setVisualizerPlaying(false);
-  }
-
-  sendCmdWithCallback('players/all', {}, function(players) { allPlayers = players; resolve(); });
-  sendCmdWithCallback('player_queues/all', {}, function(queues) { allQueues = queues; resolve(); });
-}
-
-function handlePlayerUpdate(player) {
-  if (!player || !player.available) return;
-  if (player.player_id === activePlayerId || player.playback_state === 'playing') {
-    fetchActivePlaying();
-    return;
-  }
-  if (activePlayerId && player.player_id !== activePlayerId) return;
-  fetchActivePlaying();
-}
-
-function handleQueueUpdate(queue) {
-  if (!queue) return;
-  fetchActivePlaying();
-}
-
-function handleTimeUpdate(data) {
-  if (!data || !activePlayerId) return;
-  if (typeof data.elapsed_time === 'number') {
-    currentPos = data.elapsed_time;
-    updateProgress();
-  }
-}
-
-connect();
-
-// Auto-reload when a new version is deployed.
-// Polls package.json every 30s and reloads if the version changes.
-(function() {
-  var currentVersion = null;
-
-  function checkVersion() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'package.json?_=' + Date.now(), true);
-    xhr.onload = function() {
-      if (xhr.status === 200) {
-        try {
-          var v = JSON.parse(xhr.responseText).version;
-          if (currentVersion === null) {
-            currentVersion = v;
-          } else if (v !== currentVersion) {
-            window.location.reload();
-          }
-        } catch(e) {}
-      }
+    ws.onopen = () => {
+      el.wsStatus.textContent = 'WS:CONNECTING';
+      el.connError.classList.remove('visible');
     };
-    xhr.send();
-  }
+    ws.onmessage = onMessage;
+    ws.onclose = (e) => {
+      el.wsStatus.textContent = `WS:DOWN (${e.code})`;
+      el.connError.classList.add('visible');
+      clearInterval(progressInterval);
+      clearInterval(pollTimer);
+      reconnectTimer = setTimeout(connect, 5000);
+    };
+    ws.onerror = () => {
+      el.wsStatus.textContent = `WS:ERR ${MA_BASE}`;
+      ws.close();
+    };
+  };
 
+  // ── Polling fallback ────────────────────────────────────────────
+  let pollTimer = null;
+  const startPolling = () => {
+    clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+      if (authenticated && ws?.readyState === WebSocket.OPEN) fetchActivePlaying();
+    }, 5000);
+  };
+
+  // ── Auto-reload on deploy ───────────────────────────────────────
+  let deployedVersion = null;
+  const checkVersion = () => {
+    fetch(`package.json?_=${Date.now()}`).then(r => r.json()).then(pkg => {
+      if (deployedVersion === null) deployedVersion = pkg.version;
+      else if (pkg.version !== deployedVersion) window.location.reload();
+    }).catch(() => {});
+  };
   checkVersion();
   setInterval(checkVersion, 30000);
+
+  // ── Boot ────────────────────────────────────────────────────────
+  connect();
 })();
