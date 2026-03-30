@@ -437,7 +437,7 @@ body::after {
 #lyrics-content {
   height: 100%;
   overflow-y: auto;
-  padding: 80px 48px 80px 24px;
+  padding: 70vh 48px 30vh 24px;
   scrollbar-width: none;
 }
 
