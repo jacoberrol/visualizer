@@ -450,13 +450,17 @@ body::after {
   font-size: 18px;
   line-height: 2;
   color: var(--accent);
-  opacity: 0.1;
-  transition: opacity 0.6s ease;
+  opacity: 0.06;
+  transition: opacity 1.2s ease;
   text-align: right;
   letter-spacing: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.lyric-line.near {
+  opacity: 0.18;
 }
 
 .lyric-line.active {
