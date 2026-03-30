@@ -464,10 +464,11 @@ const NP = window.NP = {
     xhr.send();
   };
 
+  let currentScrollTop = 0;
+
   const syncLyrics = () => {
     if (!lyricsLines.length || lyricsLines[0].time < 0) return;
 
-    // Find the active line based on current position
     let idx = -1;
     for (let i = lyricsLines.length - 1; i >= 0; i--) {
       if (currentPos >= lyricsLines[i].time) { idx = i; break; }
@@ -476,15 +477,15 @@ const NP = window.NP = {
     if (idx === activeLyricIdx) return;
     activeLyricIdx = idx;
 
-    // Update active class
     const lines = el.lyricsContent.querySelectorAll('.lyric-line');
-    lines.forEach((line, i) => {
-      line.classList.toggle('active', i === idx);
-    });
+    lines.forEach((line, i) => { line.classList.toggle('active', i === idx); });
 
-    // Scroll active line into view
+    // Smoothly scroll so active line sits at 70% down the container
     if (idx >= 0 && lines[idx]) {
-      lines[idx].scrollIntoView({ behavior: 'smooth', block: 'end' });
+      const container = el.lyricsContent;
+      const targetTop = lines[idx].offsetTop - container.offsetHeight * 0.7;
+      currentScrollTop = Math.max(0, targetTop);
+      container.scrollTo({ top: currentScrollTop, behavior: 'smooth' });
     }
   };
 
