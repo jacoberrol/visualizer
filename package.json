@@ -1,5 +1,12 @@
 {
   "name": "visualizer",
-  "version": "0.7.4",
-  "private": true
+  "version": "0.8.0",
+  "private": true,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "jsdom": "^29.0.1",
+    "vitest": "^4.1.2"
+  }
 }

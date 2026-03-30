@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install dependencies and run tests
+        run: npm ci && npm test
+
       - name: Connect to Tailscale
         uses: tailscale/github-action@v3
         with:
@@ -31,5 +34,5 @@ jobs:
           echo "${{ secrets.HA_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -p ${{ secrets.HA_SSH_PORT }} root@${{ secrets.HA_SSH_HOST }} "mkdir -p /config/www/models"
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${{ secrets.HA_SSH_PORT }} nowplaying.html core.js package.json root@${{ secrets.HA_SSH_HOST }}:/config/www/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${{ secrets.HA_SSH_PORT }} nowplaying.html lib.js core.js package.json root@${{ secrets.HA_SSH_HOST }}:/config/www/
           scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key -P ${{ secrets.HA_SSH_PORT }} models/*.css models/*.js root@${{ secrets.HA_SSH_HOST }}:/config/www/models/

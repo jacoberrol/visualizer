@@ -53,16 +53,10 @@ const NP = window.NP = {
 
   if (el.debugInfo) el.debugInfo.textContent = `TARGET: ws://${MA_BASE}/ws`;
 
-  // ── Utilities ───────────────────────────────────────────────────
-  const fmt = (s) => {
-    s = Math.floor(s || 0);
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec < 10 ? '0' : ''}${sec}`;
-  };
-
-  const proxyArtUrl = (url) =>
-    url ? `http://${MA_BASE}/imageproxy?path=${encodeURIComponent(url)}&size=500` : '';
+  // ── Utilities (from lib.js) ──────────────────────────────────────
+  const { fmt, proxyArtUrl, extractTrackData, computeElapsed, pickActivePlayer, parseLRC,
+          findActiveLyricIdx, lyricFraction, lerp } = window.NPLib;
+  const proxyArt = (url) => proxyArtUrl(url, MA_BASE);
 
   const runHooks = (name, data) => {
     for (const fn of NP.hooks[name] ?? []) {
@@ -127,33 +121,9 @@ const NP = window.NP = {
     }, 1000);
   };
 
-  // ── Track data extraction ───────────────────────────────────────
-  const extractTrackData = (media, player, queue) => {
-    // Prefer queue metadata when the queue is actively playing.
-    // Spotify Connect bypasses MA's queue, leaving it idle/stale.
-    const queueIsActive = queue?.state === 'playing';
-    const queueItem = queueIsActive ? queue?.current_item : null;
-    const trackInfo = queueItem?.media_item;
-
-    const title    = trackInfo?.name ?? queueItem?.name ?? media?.title ?? '—';
-    const artists  = trackInfo?.artists;
-    const artist   = artists?.length ? artists.map(a => a.name).join(', ') : (media?.artist ?? '—');
-    const album    = trackInfo?.album?.name ?? media?.album ?? '—';
-    const artUrl   = proxyArtUrl(queueItem?.image?.path ?? media?.image_url ?? '');
-    const duration = queueItem?.duration ?? media?.duration ?? 0;
-    const source   = media?.source_id ?? media?.uri ?? '—';
-
-    return { title, artist, album, artUrl, duration, source };
-  };
-
-  const computeElapsed = (player) => {
-    const elapsed = player.elapsed_time ?? 0;
-    const lastUpdated = player.elapsed_time_last_updated ?? 0;
-    if (isPlaying && lastUpdated > 0) {
-      return elapsed + (Date.now() / 1000 - lastUpdated);
-    }
-    return elapsed;
-  };
+  // ── Track data extraction (delegates to lib.js) ─────────────────
+  const extractTrack = (media, queue) => extractTrackData(media, queue, MA_BASE);
+  const elapsed = (player) => computeElapsed(player, isPlaying);
 
   // ── DOM rendering ───────────────────────────────────────────────
   const renderTrack = (track, state, player, queue) => {
@@ -222,17 +192,12 @@ const NP = window.NP = {
       : lastKnownMedia;
     if (!source) return showIdle();
 
-    const track = extractTrackData(source.media, player, source.queue);
-    currentPos = computeElapsed(player);
+    const track = extractTrack(source.media, source.queue);
+    currentPos = elapsed(player);
     lyricsSubPos = 0;
     currentDuration = track.duration;
     renderTrack(track, state, player, source.queue);
   };
-
-  const pickActivePlayer = (players) =>
-    players.find(p => p.available && p.playback_state === 'playing') ??
-    players.find(p => p.available && p.playback_state === 'paused') ??
-    null;
 
   // ── WebSocket ───────────────────────────────────────────────────
   let ws = null;
@@ -420,18 +385,6 @@ const NP = window.NP = {
   let lyricsTrackKey = null;  // "artist|title" to detect track changes
   let activeLyricIdx = -1;
 
-  const parseLRC = (lrc) => {
-    const lines = [];
-    for (const line of lrc.split('\n')) {
-      const match = line.match(/^\[(\d+):(\d+\.\d+)\]\s?(.*)/);
-      if (match) {
-        const time = parseInt(match[1]) * 60 + parseFloat(match[2]);
-        lines.push({ time, text: match[3] });
-      }
-    }
-    return lines;
-  };
-
   const fetchLyrics = (artist, title) => {
     const key = `${artist}|${title}`;
     if (key === lyricsTrackKey || !artist || artist === '—' || !title || title === '—') return;
@@ -483,25 +436,15 @@ const NP = window.NP = {
     const lines = container.querySelectorAll('.lyric-line');
     if (!lines.length) return;
 
-    // Find current index and fractional progress between lines
-    let idx = -1;
-    for (let i = lyricsLines.length - 1; i >= 0; i--) {
-      if (adjustedPos >= lyricsLines[i].time) { idx = i; break; }
-    }
+    const idx = findActiveLyricIdx(lyricsLines, adjustedPos);
 
     // Calculate smooth scroll target by interpolating between line positions
     if (idx >= 0 && lines[idx]) {
       const anchorOffset = container.offsetHeight * 0.7;
       const currentLineTop = lines[idx].offsetTop;
-
-      // Interpolate between current and next line for smooth movement
-      let frac = 0;
-      if (idx < lyricsLines.length - 1) {
-        const span = lyricsLines[idx + 1].time - lyricsLines[idx].time;
-        if (span > 0) frac = Math.min(1, (adjustedPos - lyricsLines[idx].time) / span);
-      }
+      const frac = lyricFraction(lyricsLines, idx, adjustedPos);
       const nextTop = idx < lines.length - 1 ? lines[idx + 1].offsetTop : currentLineTop;
-      const interpolatedTop = currentLineTop + (nextTop - currentLineTop) * frac;
+      const interpolatedTop = lerp(currentLineTop, nextTop, frac);
       targetScrollPos = Math.max(0, interpolatedTop - anchorOffset);
     }
 
@@ -538,9 +481,8 @@ const NP = window.NP = {
     // Recalculate target every frame
     syncLyrics();
 
-    const diff = targetScrollPos - scrollPos;
-    if (Math.abs(diff) > 0.3) {
-      scrollPos += diff * 0.04;
+    if (Math.abs(targetScrollPos - scrollPos) > 0.3) {
+      scrollPos = lerp(scrollPos, targetScrollPos, 0.04);
       el.lyricsContent.scrollTop = scrollPos;
     }
     lyricsRafId = requestAnimationFrame(lyricsScrollLoop);
