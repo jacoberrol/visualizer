@@ -12,6 +12,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install dependencies and run tests
+        run: npm ci && npm test
+
       - name: Check version was bumped
         run: |
           PR_VERSION=$(node -p "require('./package.json').version")
