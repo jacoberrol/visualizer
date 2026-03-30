@@ -80,9 +80,13 @@ The deployed page polls `package.json` every 30 seconds and auto-reloads when th
 
 ## Adding New Themes
 
-1. Create `models/<name>.css` (full styling: layout, fonts, colors, effects)
-2. Create `models/<name>.js` (model-specific behaviors, can be minimal)
-3. Use `?theme=<name>` — no changes to core files needed
+1. Create `models/<name>.css` — full styling: layout, fonts, colors, effects. Use an existing model as a starting point.
+2. Create `models/<name>.js` — model-specific behaviors (can be minimal). Use `NP.hooks` to react to track/state changes.
+3. Add `'<name>'` to the `themes` array in the theme selector script in `nowplaying.html`:
+   ```js
+   var themes = ['te', 'crt', '<name>'];
+   ```
+4. Use `?theme=<name>` to load the new theme, or cycle to it via the theme selector in the top bar.
 
 ## GitOps Setup
 

@@ -80,4 +80,4 @@ Select with `?theme=te` (default) or `?theme=crt`.
 - All state comes from Music Assistant WebSocket; no REST API calls (except `/imageproxy` for album art)
 - Secrets never committed — only `config.example.js` is in the repo
 - Version bump required for every PR (enforced by CI)
-- Adding new models: create `models/<name>.css` + `models/<name>.js`, use `?theme=<name>`
+- Adding new themes: create `models/<name>.css` + `models/<name>.js`, add `'<name>'` to the `themes` array in the theme selector script in `nowplaying.html`

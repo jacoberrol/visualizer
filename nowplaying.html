@@ -10,6 +10,23 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; }
+  #theme-selector {
+    cursor: pointer;
+    opacity: 0.35;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    transition: opacity 0.2s;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #theme-selector:hover, #theme-selector:focus {
+    opacity: 0.8;
+    outline: none;
+  }
 </style>
 <script>
   // Synchronous model loader — runs before rendering to prevent FOUC
@@ -39,7 +56,7 @@
   <div id="topbar">
     <div class="logo">MUSIC ASSISTANT // MONITOR v__VERSION__ sha:__SHA__</div>
     <div class="sys-info">
-      <span>SYS:ONLINE</span>
+      <span id="theme-selector" tabindex="0" role="button"></span>
       <span id="clock">00:00:00</span>
       <span id="ws-status">WS:CONNECTING</span>
     </div>
@@ -104,6 +121,27 @@
     var s = document.createElement('script');
     s.src = 'models/' + model + '.js';
     document.body.appendChild(s);
+  })();
+
+  // Theme selector — cycles through available themes on click/keypress
+  (function() {
+    var themes = ['te', 'crt'];
+    var current = document.documentElement.getAttribute('data-model');
+    var btn = document.getElementById('theme-selector');
+    btn.textContent = 'THEME: ' + current.toUpperCase();
+
+    function switchTheme() {
+      var idx = themes.indexOf(current);
+      var next = themes[(idx + 1) % themes.length];
+      var params = new URLSearchParams(window.location.search);
+      params.set('theme', next);
+      window.location.search = params.toString();
+    }
+
+    btn.addEventListener('click', switchTheme);
+    btn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); switchTheme(); }
+    });
   })();
 </script>
 </body>
