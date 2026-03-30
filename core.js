@@ -181,7 +181,9 @@ const NP = window.NP = {
     el.idleScreen.classList.remove('visible');
     updateProgress();
 
-    // Sync public state
+    // Sync public state — only fire onTrackChange when track actually changes
+    const prevTitle = NP.state.title;
+    const prevArtist = NP.state.artist;
     Object.assign(NP.state, {
       isPlaying, playbackState: state,
       title: track.title, artist: track.artist, album: track.album,
@@ -189,7 +191,9 @@ const NP = window.NP = {
       source: track.source, playerName: player.name,
       shuffleEnabled: shuffleOn, repeatEnabled: repeatOn,
     });
-    runHooks('onTrackChange', NP.state);
+    if (track.title !== prevTitle || track.artist !== prevArtist) {
+      runHooks('onTrackChange', NP.state);
+    }
   };
 
   // ── Player state management ─────────────────────────────────────
