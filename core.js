@@ -409,6 +409,7 @@ const NP = window.NP = {
   bindControl(el.btnNext, 'players/cmd/next');
 
   // ── Lyrics (LRCLIB) ──────────────────────────────────────────────
+  el.lyricsDebug.textContent = 'LYRICS: init start';
   let lyricsLines = [];      // [{ time: seconds, text: string }]
   let lyricsTrackKey = null;  // "artist|title" to detect track changes
   let activeLyricIdx = -1;
