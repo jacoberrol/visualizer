@@ -434,29 +434,37 @@ const NP = window.NP = {
     el.lyricsOverlay.classList.remove('has-lyrics');
 
     const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
-    debugMsg(`LYRICS: fetching for ${artist} - ${title}`);
-    fetch(url).then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.json();
-    }).then(data => {
-      const lrc = data.syncedLyrics || data.plainLyrics;
-      if (!lrc) { debugMsg('LYRICS: none found'); return; }
-      debugMsg(`LYRICS: ${lyricsLines.length || 'parsing...'} lines`);
+    el.entityId.textContent = `LYRICS: fetching...`;
 
-      if (data.syncedLyrics) {
-        lyricsLines = parseLRC(data.syncedLyrics);
-      } else {
-        // Plain lyrics — no timestamps, just display all lines
-        lyricsLines = data.plainLyrics.split('\n').map(text => ({ time: -1, text }));
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.onload = () => {
+      if (xhr.status !== 200) {
+        el.entityId.textContent = `LYRICS: HTTP ${xhr.status}`;
+        return;
       }
+      try {
+        const data = JSON.parse(xhr.responseText);
+        const lrc = data.syncedLyrics || data.plainLyrics;
+        if (!lrc) { el.entityId.textContent = 'LYRICS: none found'; return; }
 
-      // Render all lines
-      el.lyricsContent.innerHTML = lyricsLines
-        .map((l, i) => `<div class="lyric-line" data-idx="${i}">${l.text || '&nbsp;'}</div>`)
-        .join('');
-      el.lyricsOverlay.classList.add('has-lyrics');
-      debugMsg(`LYRICS: ${lyricsLines.length} lines loaded`);
-    }).catch(err => { debugMsg(`LYRICS ERR: ${err.message}`); });
+        if (data.syncedLyrics) {
+          lyricsLines = parseLRC(data.syncedLyrics);
+        } else {
+          lyricsLines = data.plainLyrics.split('\n').map(text => ({ time: -1, text }));
+        }
+
+        el.lyricsContent.innerHTML = lyricsLines
+          .map((l, i) => `<div class="lyric-line" data-idx="${i}">${l.text || '&nbsp;'}</div>`)
+          .join('');
+        el.lyricsOverlay.classList.add('has-lyrics');
+        el.entityId.textContent = `LYRICS: ${lyricsLines.length} lines`;
+      } catch (e) {
+        el.entityId.textContent = `LYRICS: parse err`;
+      }
+    };
+    xhr.onerror = () => { el.entityId.textContent = 'LYRICS: network err'; };
+    xhr.send();
   };
 
   const syncLyrics = () => {
