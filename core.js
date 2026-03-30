@@ -46,6 +46,8 @@ const NP = window.NP = {
     pillShuffle: document.getElementById('pill-shuffle'),
     pillRepeat:  document.getElementById('pill-repeat'),
     visualizer:  document.getElementById('visualizer'),
+    lyricsOverlay: document.getElementById('lyrics-overlay'),
+    lyricsContent: document.getElementById('lyrics-content'),
   };
 
   if (el.debugInfo) el.debugInfo.textContent = `TARGET: ws://${MA_BASE}/ws`;
@@ -404,6 +406,89 @@ const NP = window.NP = {
   bindControl(el.stateIndicator, 'players/cmd/play_pause');
   bindControl(el.btnPrev, 'players/cmd/previous');
   bindControl(el.btnNext, 'players/cmd/next');
+
+  // ── Lyrics (LRCLIB) ──────────────────────────────────────────────
+  let lyricsLines = [];      // [{ time: seconds, text: string }]
+  let lyricsTrackKey = null;  // "artist|title" to detect track changes
+  let activeLyricIdx = -1;
+
+  const parseLRC = (lrc) => {
+    const lines = [];
+    for (const line of lrc.split('\n')) {
+      const match = line.match(/^\[(\d+):(\d+\.\d+)\]\s?(.*)/);
+      if (match) {
+        const time = parseInt(match[1]) * 60 + parseFloat(match[2]);
+        lines.push({ time, text: match[3] });
+      }
+    }
+    return lines;
+  };
+
+  const fetchLyrics = (artist, title) => {
+    const key = `${artist}|${title}`;
+    if (key === lyricsTrackKey || !artist || artist === '—' || !title || title === '—') return;
+    lyricsTrackKey = key;
+    lyricsLines = [];
+    activeLyricIdx = -1;
+    el.lyricsContent.innerHTML = '';
+    el.lyricsOverlay.classList.remove('has-lyrics');
+
+    const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
+    fetch(url).then(r => {
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    }).then(data => {
+      const lrc = data.syncedLyrics || data.plainLyrics;
+      if (!lrc) return;
+
+      if (data.syncedLyrics) {
+        lyricsLines = parseLRC(data.syncedLyrics);
+      } else {
+        // Plain lyrics — no timestamps, just display all lines
+        lyricsLines = data.plainLyrics.split('\n').map(text => ({ time: -1, text }));
+      }
+
+      // Render all lines
+      el.lyricsContent.innerHTML = lyricsLines
+        .map((l, i) => `<div class="lyric-line" data-idx="${i}">${l.text || '&nbsp;'}</div>`)
+        .join('');
+      el.lyricsOverlay.classList.add('has-lyrics');
+    }).catch(() => {});
+  };
+
+  const syncLyrics = () => {
+    if (!lyricsLines.length || lyricsLines[0].time < 0) return;
+
+    // Find the active line based on current position
+    let idx = -1;
+    for (let i = lyricsLines.length - 1; i >= 0; i--) {
+      if (currentPos >= lyricsLines[i].time) { idx = i; break; }
+    }
+
+    if (idx === activeLyricIdx) return;
+    activeLyricIdx = idx;
+
+    // Update active class
+    const lines = el.lyricsContent.querySelectorAll('.lyric-line');
+    lines.forEach((line, i) => {
+      line.classList.toggle('active', i === idx);
+    });
+
+    // Scroll active line into view
+    if (idx >= 0 && lines[idx]) {
+      lines[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // Hook into track changes to fetch lyrics
+  NP.hooks.onTrackChange.push((state) => {
+    fetchLyrics(state.artist, state.title);
+  });
+
+  // Hook into progress to sync lyrics
+  NP.hooks.onProgress.push(() => {
+    syncLyrics();
+  });
 
   // ── Auto-reload on deploy ───────────────────────────────────────
   let deployedVersion = null;
