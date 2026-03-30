@@ -48,6 +48,7 @@ const NP = window.NP = {
     visualizer:  document.getElementById('visualizer'),
     lyricsOverlay: document.getElementById('lyrics-overlay'),
     lyricsContent: document.getElementById('lyrics-content'),
+    lyricsDebug:   document.getElementById('lyrics-debug'),
   };
 
   if (el.debugInfo) el.debugInfo.textContent = `TARGET: ws://${MA_BASE}/ws`;
@@ -434,13 +435,13 @@ const NP = window.NP = {
     el.lyricsOverlay.classList.remove('has-lyrics');
 
     const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
-    el.entityId.textContent = `LYRICS: fetching...`;
+    el.lyricsDebug.textContent = `LYRICS: fetching...`;
 
     const xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     xhr.onload = () => {
       if (xhr.status !== 200) {
-        el.entityId.textContent = `LYRICS: HTTP ${xhr.status}`;
+        el.lyricsDebug.textContent = `LYRICS: HTTP ${xhr.status}`;
         return;
       }
       try {
@@ -458,9 +459,9 @@ const NP = window.NP = {
           .map((l, i) => `<div class="lyric-line" data-idx="${i}">${l.text || '&nbsp;'}</div>`)
           .join('');
         el.lyricsOverlay.classList.add('has-lyrics');
-        el.entityId.textContent = `LYRICS: ${lyricsLines.length} lines`;
+        el.lyricsDebug.textContent = `LYRICS: ${lyricsLines.length} lines`;
       } catch (e) {
-        el.entityId.textContent = `LYRICS: parse err`;
+        el.lyricsDebug.textContent = `LYRICS: parse err`;
       }
     };
     xhr.onerror = () => { el.entityId.textContent = 'LYRICS: network err'; };
@@ -492,7 +493,9 @@ const NP = window.NP = {
   };
 
   // Hook into track changes to fetch lyrics
+  el.lyricsDebug.textContent = 'LYRICS: hook registered';
   NP.hooks.onTrackChange.push((state) => {
+    el.lyricsDebug.textContent = `LYRICS: hook fired for ${state.artist} - ${state.title}`;
     fetchLyrics(state.artist, state.title);
   });
 
