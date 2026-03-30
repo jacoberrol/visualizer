@@ -1,40 +1,53 @@
 # Now Playing Visualizer
 
-A CRT/terminal-styled "Now Playing" dashboard for Home Assistant. Displays currently-playing media info from any `media_player` entity (Sonos, etc.) with a retro green-on-black aesthetic.
+A "Now Playing" dashboard for Home Assistant, powered by Music Assistant. Displays currently-playing media info with multiple visual themes.
 
 ![screenshot placeholder]
 
 ## Features
 
-- Real-time track info via Home Assistant WebSocket API
+- Real-time track info via Music Assistant WebSocket API
 - Album art with blurred background
 - Progress bar, shuffle/repeat indicators
 - Animated visualizer bars
+- Multiple visual models: **TE** (Teenage Engineering) and **CRT** (retro terminal)
 - Idle/standby screen when nothing is playing
 - Auto-reconnect on connection loss
+- Auto-reload on deploy (polls for version changes)
 
 ## Quick Start
 
 1. Copy `config.example.js` to `config.js` and fill in your values
-2. Open `nowplaying.html` in a browser
+2. Serve the project via a local HTTP server (e.g. `python3 -m http.server 8080`)
+3. Open `http://localhost:8080/nowplaying.html`
 
-Pass `?entity=media_player.your_entity` in the URL to select a specific player. Falls back to `DEFAULT_ENTITY` from `config.js`.
+### Themes
+
+- `?theme=te` (default) — Teenage Engineering: clean geometric, warm orange, Space Grotesk font
+- `?theme=crt` — retro CRT terminal: green on black, scanlines, monospace
+- `?theme=crt&color=amber` — CRT with amber palette (also: `blue`, `red`, `white`)
 
 ## Deployment
 
-The dashboard is a single HTML file that lives in Home Assistant's `config/www/` folder, accessible at:
+The dashboard lives in Home Assistant's `config/www/` folder, accessible at:
 
 ```
-http://<ha-host>:8123/local/nowplaying.html?entity=media_player.living_room
+http://<ha-host>:8123/local/nowplaying.html
 ```
 
 ### Automated (GitOps)
 
-Merging to `main` triggers a GitHub Actions workflow that SCPs `nowplaying.html` to the HA Green via Tailscale + SSH. See [GitOps Setup](#gitops-setup) below.
+Merging to `main` triggers a GitHub Actions workflow that:
+1. Stamps the version and commit SHA into the HTML
+2. SCPs `nowplaying.html`, `core.js`, `package.json`, and `models/` to the HA Green via Tailscale + SSH
+
+A separate CI check on PRs enforces that the `package.json` version was bumped.
+
+See [GitOps Setup](#gitops-setup) below.
 
 ### Manual
 
-Copy `nowplaying.html` to your HA Green's `/config/www/` folder via SSH or the File Editor add-on.
+Copy `nowplaying.html`, `core.js`, `package.json`, and the `models/` directory to your HA Green's `/config/www/` folder via SSH or the File Editor add-on.
 
 ## Configuration
 
@@ -47,12 +60,29 @@ cp config.example.js config.js
 Then edit `config.js`:
 
 ```javascript
-const HA_HOST = 'homeassistant.local:8123';    // HA hostname:port
-const HA_TOKEN = 'YOUR_LONG_LIVED_ACCESS_TOKEN'; // HA Profile > Security
-const DEFAULT_ENTITY = 'media_player.living_room'; // fallback entity
+const MA_HOST = 'homeassistant.local:8095';       // Music Assistant hostname:port
+const MA_TOKEN = 'YOUR_MUSIC_ASSISTANT_TOKEN';     // MA long-lived access token
 ```
 
 This file must exist both locally (for development) and on the HA device at `/config/www/config.js`.
+
+## Versioning
+
+The project uses semver via `package.json`. Every PR must bump the version:
+
+```bash
+npm version patch   # 0.2.0 → 0.2.1
+npm version minor   # 0.2.0 → 0.3.0
+npm version major   # 0.2.0 → 1.0.0
+```
+
+The deployed page polls `package.json` every 30 seconds and auto-reloads when the version changes.
+
+## Adding New Themes
+
+1. Create `models/<name>.css` (full styling: layout, fonts, colors, effects)
+2. Create `models/<name>.js` (model-specific behaviors, can be minimal)
+3. Use `?theme=<name>` — no changes to core files needed
 
 ## GitOps Setup
 
@@ -105,13 +135,12 @@ SSH into the HA Green and create the config file:
 ```bash
 ssh root@<tailscale-hostname> -p <port>
 cat > /config/www/config.js << 'EOF'
-const HA_HOST = 'homeassistant.local:8123';
-const HA_TOKEN = 'your-real-token-here';
-const DEFAULT_ENTITY = 'media_player.living_room';
+const MA_HOST = 'homeassistant.local:8095';
+const MA_TOKEN = 'your-ma-token-here';
 EOF
 ```
 
-This file is never overwritten by deployments — only `nowplaying.html` is deployed.
+This file is never overwritten by deployments.
 
 ### 6. Deploy
 
@@ -132,11 +161,12 @@ For a dedicated "now playing" display on a Fire TV, use [Fully Kiosk Browser](ht
    ```
    http://<ha-host>:8123/local/nowplaying.html
    ```
+5. **Enable Start on Boot** in Fully Kiosk's settings so the dashboard launches automatically when the TV powers on
 
 > **Note:** Fully Kiosk Browser requires Android 8+. Fire TVs from 2017 or earlier (Android 7 / Fire OS 5) may need an older APK version.
 
 ## Security Notes
 
 - `config.js` is git-ignored and never committed — secrets stay on the device
-- If you previously had secrets committed in git history, rotate your HA long-lived access token (Profile > Security > Long-Lived Access Tokens)
+- If you previously had secrets committed in git history, rotate your tokens
 - The SSH deploy key should only be used for this deployment workflow
