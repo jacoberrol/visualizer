@@ -434,12 +434,14 @@ const NP = window.NP = {
     el.lyricsOverlay.classList.remove('has-lyrics');
 
     const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
+    debugMsg(`LYRICS: fetching for ${artist} - ${title}`);
     fetch(url).then(r => {
-      if (!r.ok) throw new Error(r.status);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     }).then(data => {
       const lrc = data.syncedLyrics || data.plainLyrics;
-      if (!lrc) return;
+      if (!lrc) { debugMsg('LYRICS: none found'); return; }
+      debugMsg(`LYRICS: ${lyricsLines.length || 'parsing...'} lines`);
 
       if (data.syncedLyrics) {
         lyricsLines = parseLRC(data.syncedLyrics);
@@ -453,7 +455,8 @@ const NP = window.NP = {
         .map((l, i) => `<div class="lyric-line" data-idx="${i}">${l.text || '&nbsp;'}</div>`)
         .join('');
       el.lyricsOverlay.classList.add('has-lyrics');
-    }).catch(() => {});
+      debugMsg(`LYRICS: ${lyricsLines.length} lines loaded`);
+    }).catch(err => { debugMsg(`LYRICS ERR: ${err.message}`); });
   };
 
   const syncLyrics = () => {
