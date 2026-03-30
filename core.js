@@ -97,6 +97,7 @@ const NP = window.NP = {
   let lastProgressPct = 0;
   let progressInterval = null;
   let isPlaying = false;
+  let lyricsSubPos = 0;
 
   const updateProgress = () => {
     if (currentDuration <= 0) return;
@@ -122,7 +123,7 @@ const NP = window.NP = {
   const startProgressTick = () => {
     clearInterval(progressInterval);
     progressInterval = setInterval(() => {
-      if (isPlaying) { currentPos += 1; updateProgress(); }
+      if (isPlaying) { currentPos += 1; lyricsSubPos = 0; updateProgress(); }
     }, 1000);
   };
 
@@ -223,6 +224,7 @@ const NP = window.NP = {
 
     const track = extractTrackData(source.media, player, source.queue);
     currentPos = computeElapsed(player);
+    lyricsSubPos = 0;
     currentDuration = track.duration;
     renderTrack(track, state, player, source.queue);
   };
@@ -326,6 +328,7 @@ const NP = window.NP = {
     if (msg.event === 'queue_updated')       msg.data && fetchActivePlaying();
     if (msg.event === 'queue_time_updated' && msg.data?.elapsed_time != null) {
       currentPos = msg.data.elapsed_time;
+      lyricsSubPos = 0;
       updateProgress();
     }
   };
@@ -475,7 +478,7 @@ const NP = window.NP = {
   const syncLyrics = () => {
     if (!lyricsLines.length || lyricsLines[0].time < 0) return;
 
-    const adjustedPos = currentPos + 3.5;
+    const adjustedPos = currentPos + lyricsSubPos + 3.5;
     const container = el.lyricsContent;
     const lines = container.querySelectorAll('.lyric-line');
     if (!lines.length) return;
@@ -525,10 +528,10 @@ const NP = window.NP = {
   // Smooth scroll loop — recalculates target and lerps every frame
   let lastFrameTime = 0;
   const lyricsScrollLoop = (timestamp) => {
-    // Advance currentPos fractionally between 1s ticks for smooth interpolation
+    // Accumulate sub-second time for smooth interpolation between 1s ticks
     if (isPlaying && lastFrameTime > 0) {
       const dt = (timestamp - lastFrameTime) / 1000;
-      if (dt > 0 && dt < 0.5) currentPos += dt;
+      if (dt > 0 && dt < 0.5) lyricsSubPos += dt;
     }
     lastFrameTime = timestamp;
 
