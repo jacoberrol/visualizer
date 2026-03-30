@@ -19,6 +19,7 @@ const NP = window.NP = {
 
 // ── IIFE: all internals stay private ────────────────────────────────
 (function () {
+  document.getElementById('lyrics-debug').textContent = 'IIFE RUNNING';
   try {
   const MA_BASE = typeof MA_HOST !== 'undefined' ? MA_HOST : HA_HOST.replace(':8123', ':8095');
 
