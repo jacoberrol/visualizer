@@ -522,11 +522,22 @@ const NP = window.NP = {
     activeLyricIdx = idx;
   };
 
-  // Smooth scroll loop — runs every frame, lerps toward target
-  const lyricsScrollLoop = () => {
+  // Smooth scroll loop — recalculates target and lerps every frame
+  let lastFrameTime = 0;
+  const lyricsScrollLoop = (timestamp) => {
+    // Advance currentPos fractionally between 1s ticks for smooth interpolation
+    if (isPlaying && lastFrameTime > 0) {
+      const dt = (timestamp - lastFrameTime) / 1000;
+      if (dt > 0 && dt < 0.5) currentPos += dt;
+    }
+    lastFrameTime = timestamp;
+
+    // Recalculate target every frame
+    syncLyrics();
+
     const diff = targetScrollPos - scrollPos;
-    if (Math.abs(diff) > 0.5) {
-      scrollPos += diff * 0.06;
+    if (Math.abs(diff) > 0.3) {
+      scrollPos += diff * 0.04;
       el.lyricsContent.scrollTop = scrollPos;
     }
     lyricsRafId = requestAnimationFrame(lyricsScrollLoop);
@@ -539,13 +550,8 @@ const NP = window.NP = {
     targetScrollPos = 0;
   });
 
-  // Hook into progress to sync lyrics
-  NP.hooks.onProgress.push(() => {
-    syncLyrics();
-  });
-
   // Start the smooth scroll loop
-  lyricsScrollLoop();
+  lyricsScrollLoop(0);
 
   // ── Auto-reload on deploy ───────────────────────────────────────
   let deployedVersion = null;
