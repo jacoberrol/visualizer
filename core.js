@@ -470,7 +470,7 @@ const NP = window.NP = {
     if (!lyricsLines.length || lyricsLines[0].time < 0) return;
 
     // Offset ahead to compensate for polling lag
-    const adjustedPos = currentPos + 2.5;
+    const adjustedPos = currentPos + 3.5;
     let idx = -1;
     for (let i = lyricsLines.length - 1; i >= 0; i--) {
       if (adjustedPos >= lyricsLines[i].time) { idx = i; break; }
