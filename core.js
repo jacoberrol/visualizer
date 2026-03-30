@@ -353,6 +353,24 @@ const NP = window.NP = {
     }, 5000);
   };
 
+  // ── Media controls (remote/keyboard) ─────────────────────────────
+  const playerCmd = (command) => {
+    if (!activePlayerId || !authenticated || ws?.readyState !== WebSocket.OPEN) return;
+    send(command, { player_id: activePlayerId });
+  };
+
+  const mediaKeyMap = {
+    'MediaPlayPause': 'players/cmd/play_pause',
+    ' ':              'players/cmd/play_pause',
+    'MediaTrackNext': 'players/cmd/next',
+    'MediaTrackPrevious': 'players/cmd/previous',
+  };
+
+  document.addEventListener('keydown', (e) => {
+    const cmd = mediaKeyMap[e.key];
+    if (cmd) { e.preventDefault(); playerCmd(cmd); }
+  });
+
   // ── Auto-reload on deploy ───────────────────────────────────────
   let deployedVersion = null;
   const checkVersion = () => {
