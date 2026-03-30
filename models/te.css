@@ -427,12 +427,16 @@ body::after {
   font-weight: 300;
   line-height: 2.2;
   color: var(--text-primary);
-  opacity: 0.12;
-  transition: opacity 0.6s ease;
+  opacity: 0.08;
+  transition: opacity 1.2s ease;
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.lyric-line.near {
+  opacity: 0.2;
 }
 
 .lyric-line.active {
